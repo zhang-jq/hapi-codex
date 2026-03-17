@@ -13,12 +13,17 @@ import { buildHapiMcpBridge } from './utils/buildHapiMcpBridge';
 import { emitReadyIfIdle } from './utils/emitReadyIfIdle';
 import type { CodexSession } from './session';
 import type { EnhancedMode } from './loop';
+import { formatMessageWithAttachments } from '@/utils/attachmentFormatter';
 import { hasCodexCliOverrides } from './utils/codexCliOverrides';
 import { buildCodexStartConfig } from './utils/codexStartConfig';
 import { AppServerEventConverter } from './utils/appServerEventConverter';
 import { registerAppServerPermissionHandlers } from './utils/appServerPermissionAdapter';
 import { buildThreadStartParams, buildTurnStartParams } from './utils/appServerConfig';
 import { shouldIgnoreTerminalEvent } from './utils/terminalEventGuard';
+import {
+    decodeQueuedCodexUserMessage,
+    formatQueuedCodexUserMessageForDisplay
+} from './utils/queuedUserMessage';
 import {
     RemoteLauncherBase,
     type RemoteLauncherDisplayContext,
@@ -649,7 +654,12 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
                 continue;
             }
 
-            messageBuffer.addMessage(message.message, 'user');
+            const queuedUserMessage = decodeQueuedCodexUserMessage(message.message);
+            const formattedQueuedMessage = formatMessageWithAttachments(
+                queuedUserMessage.text,
+                queuedUserMessage.attachments
+            );
+            messageBuffer.addMessage(formatQueuedCodexUserMessageForDisplay(queuedUserMessage), 'user');
             currentModeHash = message.hash;
 
             try {
@@ -702,7 +712,8 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
 
                         const turnParams = buildTurnStartParams({
                             threadId,
-                            message: message.message,
+                            message: queuedUserMessage.text,
+                            attachments: queuedUserMessage.attachments,
                             mode: message.mode,
                             cliOverrides: session.codexCliOverrides
                         });
@@ -721,7 +732,7 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
                         }
                     } else if (mcpClient) {
                         const startConfig: CodexSessionConfig = buildCodexStartConfig({
-                            message: message.message,
+                            message: formattedQueuedMessage,
                             mode: message.mode,
                             first,
                             mcpServers,
@@ -744,7 +755,8 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
 
                     const turnParams = buildTurnStartParams({
                         threadId: this.currentThreadId,
-                        message: message.message,
+                        message: queuedUserMessage.text,
+                        attachments: queuedUserMessage.attachments,
                         mode: message.mode,
                         cliOverrides: session.codexCliOverrides
                     });
@@ -762,7 +774,7 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
                         allowAnonymousTerminalEvent = true;
                     }
                 } else if (mcpClient) {
-                    await mcpClient.continueSession(message.message, { signal: this.abortController.signal });
+                    await mcpClient.continueSession(formattedQueuedMessage, { signal: this.abortController.signal });
                     syncSessionId();
                 }
             } catch (error) {

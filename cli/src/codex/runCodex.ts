@@ -10,7 +10,7 @@ import { bootstrapSession } from '@/agent/sessionFactory';
 import { createModeChangeHandler, createRunnerLifecycle, setControlledByUser } from '@/agent/runnerLifecycle';
 import { isPermissionModeAllowedForFlavor } from '@hapi/protocol';
 import { PermissionModeSchema } from '@hapi/protocol/schemas';
-import { formatMessageWithAttachments } from '@/utils/attachmentFormatter';
+import { encodeQueuedCodexUserMessage } from './utils/queuedUserMessage';
 
 export { emitReadyIfIdle } from './utils/emitReadyIfIdle';
 
@@ -80,8 +80,16 @@ export async function runCodex(opts: {
             model: currentModel,
             collaborationMode: currentCollaborationMode
         };
-        const formattedText = formatMessageWithAttachments(message.content.text, message.content.attachments);
-        messageQueue.push(formattedText, enhancedMode);
+        const attachments = message.content.attachments;
+        if (attachments && attachments.length > 0) {
+            messageQueue.pushIsolate(encodeQueuedCodexUserMessage({
+                text: message.content.text,
+                attachments
+            }), enhancedMode);
+            return;
+        }
+
+        messageQueue.push(message.content.text, enhancedMode);
     });
 
     const formatFailureReason = (message: string): string => {

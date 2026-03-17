@@ -4,7 +4,8 @@ import type { EnhancedMode } from './loop';
 
 const harness = vi.hoisted(() => ({
     notifications: [] as Array<{ method: string; params: unknown }>,
-    registerRequestCalls: [] as string[]
+    registerRequestCalls: [] as string[],
+    turnStarts: [] as unknown[]
 }));
 
 vi.mock('./codexAppServerClient', () => {
@@ -33,7 +34,8 @@ vi.mock('./codexAppServerClient', () => {
             return { thread: { id: 'thread-anonymous' } };
         }
 
-        async startTurn(): Promise<{ turn: Record<string, never> }> {
+        async startTurn(params: unknown): Promise<{ turn: Record<string, never> }> {
+            harness.turnStarts.push(params);
             const started = { turn: {} };
             harness.notifications.push({ method: 'turn/started', params: started });
             this.notificationHandler?.('turn/started', started);
@@ -65,6 +67,7 @@ vi.mock('./utils/buildHapiMcpBridge', () => ({
 }));
 
 import { codexRemoteLauncher } from './codexRemoteLauncher';
+import { encodeQueuedCodexUserMessage } from './utils/queuedUserMessage';
 
 type FakeAgentState = {
     requests: Record<string, unknown>;
@@ -77,9 +80,14 @@ function createMode(): EnhancedMode {
     };
 }
 
-function createSessionStub() {
+function createSessionStub(options?: { initialMessage?: string; isolate?: boolean }) {
     const queue = new MessageQueue2<EnhancedMode>((mode) => JSON.stringify(mode));
-    queue.push('hello from launcher test', createMode());
+    const initialMessage = options?.initialMessage ?? 'hello from launcher test';
+    if (options?.isolate) {
+        queue.pushIsolate(initialMessage, createMode());
+    } else {
+        queue.push(initialMessage, createMode());
+    }
     queue.close();
 
     const sessionEvents: Array<{ type: string; [key: string]: unknown }> = [];
@@ -153,6 +161,7 @@ describe('codexRemoteLauncher', () => {
     afterEach(() => {
         harness.notifications = [];
         harness.registerRequestCalls = [];
+        harness.turnStarts = [];
         delete process.env.CODEX_USE_MCP_SERVER;
     });
 
@@ -173,5 +182,34 @@ describe('codexRemoteLauncher', () => {
         expect(sessionEvents.filter((event) => event.type === 'ready').length).toBeGreaterThanOrEqual(1);
         expect(thinkingChanges).toContain(true);
         expect(session.thinking).toBe(false);
+    });
+
+    it('passes image attachments to app-server turns as localImage inputs', async () => {
+        delete process.env.CODEX_USE_MCP_SERVER;
+        const encodedMessage = encodeQueuedCodexUserMessage({
+            text: 'look at this',
+            attachments: [
+                {
+                    id: 'img-1',
+                    filename: 'photo.png',
+                    mimeType: 'image/png',
+                    size: 128,
+                    path: '/tmp/photo.png'
+                }
+            ]
+        });
+        const { session } = createSessionStub({
+            initialMessage: encodedMessage,
+            isolate: true
+        });
+
+        await codexRemoteLauncher(session as never);
+
+        expect(harness.turnStarts[0]).toMatchObject({
+            input: [
+                { type: 'text', text: 'look at this' },
+                { type: 'localImage', path: '/tmp/photo.png' }
+            ]
+        });
     });
 });

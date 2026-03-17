@@ -2,6 +2,8 @@ import type { EnhancedMode } from '../loop';
 import type { CodexCliOverrides } from './codexCliOverrides';
 import type { McpServersConfig } from './buildHapiMcpBridge';
 import { codexSystemPrompt } from './systemPrompt';
+import { formatMessageWithAttachments } from '@/utils/attachmentFormatter';
+import type { AttachmentMetadata } from '@/api/types';
 import type {
     ApprovalPolicy,
     SandboxMode,
@@ -72,6 +74,30 @@ function buildMcpServerConfig(mcpServers: McpServersConfig): Record<string, unkn
     return config;
 }
 
+function isImageAttachment(attachment: AttachmentMetadata): boolean {
+    return attachment.mimeType.startsWith('image/') && attachment.path.trim().length > 0;
+}
+
+function buildTurnInput(text: string, attachments: AttachmentMetadata[] | undefined): TurnStartParams['input'] {
+    const imageAttachments = (attachments ?? []).filter(isImageAttachment);
+    const nonImageAttachments = (attachments ?? []).filter((attachment) => !isImageAttachment(attachment));
+    const promptText = formatMessageWithAttachments(text, nonImageAttachments);
+    const input: TurnStartParams['input'] = [];
+
+    if (promptText || imageAttachments.length === 0) {
+        input.push({ type: 'text', text: promptText });
+    }
+
+    for (const attachment of imageAttachments) {
+        input.push({
+            type: 'localImage',
+            path: attachment.path
+        });
+    }
+
+    return input;
+}
+
 export function buildThreadStartParams(args: {
     mode: EnhancedMode;
     mcpServers: McpServersConfig;
@@ -114,6 +140,7 @@ export function buildThreadStartParams(args: {
 export function buildTurnStartParams(args: {
     threadId: string;
     message: string;
+    attachments?: AttachmentMetadata[];
     mode?: EnhancedMode;
     cliOverrides?: CodexCliOverrides;
     overrides?: {
@@ -124,7 +151,7 @@ export function buildTurnStartParams(args: {
 }): TurnStartParams {
     const params: TurnStartParams = {
         threadId: args.threadId,
-        input: [{ type: 'text', text: args.message }]
+        input: buildTurnInput(args.message, args.attachments)
     };
 
     const allowCliOverrides = args.mode?.permissionMode === 'default';

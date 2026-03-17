@@ -114,4 +114,54 @@ describe('appServerConfig', () => {
         expect(params.approvalPolicy).toBe('on-request');
         expect(params.model).toBe('gpt-5');
     });
+
+    it('sends image attachments as localImage inputs and keeps files as path references', () => {
+        const params = buildTurnStartParams({
+            threadId: 'thread-1',
+            message: 'look at these',
+            attachments: [
+                {
+                    id: 'img-1',
+                    filename: 'photo.png',
+                    mimeType: 'image/png',
+                    size: 128,
+                    path: '/tmp/photo.png'
+                },
+                {
+                    id: 'file-1',
+                    filename: 'notes.txt',
+                    mimeType: 'text/plain',
+                    size: 64,
+                    path: '/tmp/notes.txt'
+                }
+            ],
+            mode: { permissionMode: 'default' }
+        });
+
+        expect(params.input).toEqual([
+            { type: 'text', text: '@/tmp/notes.txt\n\nlook at these' },
+            { type: 'localImage', path: '/tmp/photo.png' }
+        ]);
+    });
+
+    it('allows image-only turns without an empty text part', () => {
+        const params = buildTurnStartParams({
+            threadId: 'thread-1',
+            message: '',
+            attachments: [
+                {
+                    id: 'img-1',
+                    filename: 'photo.png',
+                    mimeType: 'image/png',
+                    size: 128,
+                    path: '/tmp/photo.png'
+                }
+            ],
+            mode: { permissionMode: 'default' }
+        });
+
+        expect(params.input).toEqual([
+            { type: 'localImage', path: '/tmp/photo.png' }
+        ]);
+    });
 });

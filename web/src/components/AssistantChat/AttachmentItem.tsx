@@ -1,4 +1,4 @@
-import { AttachmentPrimitive, useThreadComposerAttachment } from '@assistant-ui/react'
+import { AttachmentPrimitive, useThreadComposerAttachment, type PendingAttachment } from '@assistant-ui/react'
 import { Spinner } from '@/components/Spinner'
 
 function ErrorIcon() {
@@ -31,19 +31,33 @@ function RemoveIcon() {
 }
 
 export function AttachmentItem() {
-    const { name, status } = useThreadComposerAttachment()
+    const attachment = useThreadComposerAttachment() as PendingAttachment & {
+        readonly source: 'thread-composer'
+        errorMessage?: string
+    }
+    const { name, status, errorMessage } = attachment
     const isUploading = status.type === 'running'
     const isError = status.type === 'incomplete'
 
     return (
-        <AttachmentPrimitive.Root className="flex items-center gap-2 rounded-lg bg-[var(--app-subtle-bg)] px-3 py-2 text-base text-[var(--app-fg)]">
+        <AttachmentPrimitive.Root
+            className="flex items-center gap-2 rounded-lg bg-[var(--app-subtle-bg)] px-3 py-2 text-base text-[var(--app-fg)]"
+            title={isError && errorMessage ? errorMessage : undefined}
+        >
             {isUploading ? <Spinner size="sm" label={null} className="text-[var(--app-hint)]" /> : null}
             {isError ? (
                 <span className="text-red-500">
                     <ErrorIcon />
                 </span>
             ) : null}
-            <span className="max-w-[150px] truncate">{name}</span>
+            <div className="min-w-0">
+                <div className="max-w-[150px] truncate">{name}</div>
+                {isError && errorMessage ? (
+                    <div className="max-w-[180px] truncate text-xs text-red-400">
+                        {errorMessage}
+                    </div>
+                ) : null}
+            </div>
             <AttachmentPrimitive.Remove
                 className="ml-auto flex h-5 w-5 items-center justify-center rounded text-[var(--app-hint)] transition-colors hover:text-[var(--app-fg)]"
                 aria-label="Remove attachment"

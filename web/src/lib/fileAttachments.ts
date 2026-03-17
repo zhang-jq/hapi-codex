@@ -10,9 +10,16 @@ export type FileAttachment = {
 
 export type UploadFunction = (file: File) => Promise<UploadFileResponse>
 
+function createFileAttachmentId(): string {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+        return crypto.randomUUID()
+    }
+    return `file_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+}
+
 export function createFileAttachment(file: File): FileAttachment {
     return {
-        id: crypto.randomUUID(),
+        id: createFileAttachmentId(),
         file,
         status: 'uploading'
     }

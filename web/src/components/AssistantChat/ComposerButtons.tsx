@@ -1,5 +1,7 @@
-import { ComposerPrimitive } from '@assistant-ui/react'
+import { useAssistantApi } from '@assistant-ui/react'
+import { useCallback, useRef, useState, type ChangeEvent } from 'react'
 import type { ConversationStatus } from '@/realtime/types'
+import { useToast } from '@/lib/toast-context'
 import { useTranslation } from '@/lib/use-translation'
 
 function VoiceAssistantIcon() {
@@ -226,6 +228,98 @@ function LoadingIcon() {
     )
 }
 
+function AttachmentButton(props: {
+    disabled: boolean
+    ariaLabel: string
+    title: string
+}) {
+    const api = useAssistantApi()
+    const { addToast } = useToast()
+    const [isAdding, setIsAdding] = useState(false)
+    const lastSelectionKeyRef = useRef<string | null>(null)
+    const lastSelectionAtRef = useRef(0)
+
+    const processFiles = useCallback(async (files: File[]) => {
+        if (files.length === 0) return
+
+        setIsAdding(true)
+
+        try {
+            // Let the picker UI fully dismiss before we start reading files on iOS Safari.
+            await new Promise((resolve) => window.setTimeout(resolve, 0))
+            for (const file of files) {
+                await api.composer().addAttachment(file)
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error'
+            console.error('[hapi] failed to add attachment', error)
+            addToast({
+                title: 'Add attachment failed',
+                body: message,
+                sessionId: '',
+                url: ''
+            })
+        } finally {
+            setIsAdding(false)
+        }
+    }, [api, addToast])
+
+    const handleSelection = useCallback((input: HTMLInputElement) => {
+        const files = Array.from(input.files ?? [])
+        input.value = ''
+        if (files.length === 0) return
+
+        const selectionKey = files
+            .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
+            .join('|')
+        const now = Date.now()
+        if (
+            lastSelectionKeyRef.current === selectionKey
+            && now - lastSelectionAtRef.current < 1000
+        ) {
+            return
+        }
+
+        lastSelectionKeyRef.current = selectionKey
+        lastSelectionAtRef.current = now
+        void processFiles(files)
+    }, [processFiles])
+
+    const handleChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+        handleSelection(event.currentTarget)
+    }, [handleSelection])
+
+    const attachmentAccept = api.composer().getState().attachmentAccept
+
+    return (
+        <label
+            aria-label={props.ariaLabel}
+            title={props.title}
+            className={`relative flex h-8 w-8 items-center justify-center rounded-full text-[var(--app-fg)]/60 transition-colors hover:bg-[var(--app-bg)] hover:text-[var(--app-fg)] ${
+                props.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+            }`}
+        >
+            <span aria-hidden="true">
+                {isAdding ? <LoadingIcon /> : <AttachmentIcon />}
+            </span>
+            <input
+                type="file"
+                multiple
+                disabled={props.disabled}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                accept={attachmentAccept === '*' ? undefined : attachmentAccept}
+                onClick={(event) => {
+                    event.currentTarget.value = ''
+                }}
+                onChange={handleChange}
+                onInput={(event) => {
+                    handleSelection(event.currentTarget as HTMLInputElement)
+                }}
+            />
+        </label>
+    )
+}
+
 function UnifiedButton(props: {
     canSend: boolean
     voiceStatus: ConversationStatus
@@ -325,14 +419,11 @@ export function ComposerButtons(props: {
     return (
         <div className="flex items-center justify-between px-2 pb-2">
             <div className="flex items-center gap-1">
-                <ComposerPrimitive.AddAttachment
-                    aria-label={t('composer.attach')}
+                <AttachmentButton
+                    ariaLabel={t('composer.attach')}
                     title={t('composer.attach')}
                     disabled={props.controlsDisabled}
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--app-fg)]/60 transition-colors hover:bg-[var(--app-bg)] hover:text-[var(--app-fg)] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                    <AttachmentIcon />
-                </ComposerPrimitive.AddAttachment>
+                />
 
                 {props.showSettingsButton ? (
                     <button

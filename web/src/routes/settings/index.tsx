@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { useTranslation, type Locale } from '@/lib/use-translation'
 import { useAppGoBack } from '@/hooks/useAppGoBack'
 import { getElevenLabsSupportedLanguages, getLanguageDisplayName, type Language } from '@/lib/languages'
@@ -73,6 +74,7 @@ function ChevronDownIcon(props: { className?: string }) {
 export default function SettingsPage() {
     const { t, locale, setLocale } = useTranslation()
     const goBack = useAppGoBack()
+    const navigate = useNavigate()
     const [isOpen, setIsOpen] = useState(false)
     const [isAppearanceOpen, setIsAppearanceOpen] = useState(false)
     const [isFontOpen, setIsFontOpen] = useState(false)
@@ -398,6 +400,21 @@ export default function SettingsPage() {
                                 </div>
                             )}
                         </div>
+                    </div>
+
+                    {/* About section */}
+                    <div className="border-b border-[var(--app-divider)]">
+                        <div className="px-3 py-2 text-xs font-semibold text-[var(--app-hint)] uppercase tracking-wide">
+                            Admin
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => navigate({ to: '/admin' })}
+                            className="flex w-full items-center justify-between px-3 py-3 text-left transition-colors hover:bg-[var(--app-subtle-bg)]"
+                        >
+                            <span className="text-[var(--app-fg)]">Admin & Diagnose</span>
+                            <span className="text-[var(--app-hint)]">Sessions, access, tokens</span>
+                        </button>
                     </div>
 
                     {/* About section */}

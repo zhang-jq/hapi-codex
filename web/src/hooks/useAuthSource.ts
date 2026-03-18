@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getTelegramWebApp, isTelegramEnvironment } from './useTelegram'
 import type { AuthSource } from './useAuth'
-
-const ACCESS_TOKEN_PREFIX = 'hapi_access_token::'
+import {
+    clearStoredAccessToken,
+    getAccessTokenKey,
+    getStoredAccessToken,
+    storeAccessToken,
+} from '@/lib/accessTokenStorage'
 
 function getTelegramInitData(): string | null {
     const tg = getTelegramWebApp()
@@ -25,34 +29,6 @@ function getTokenFromUrlParams(): string | null {
     if (typeof window === 'undefined') return null
     const query = new URLSearchParams(window.location.search)
     return query.get('token')
-}
-
-function getAccessTokenKey(baseUrl: string): string {
-    return `${ACCESS_TOKEN_PREFIX}${baseUrl}`
-}
-
-function getStoredAccessToken(key: string): string | null {
-    try {
-        return localStorage.getItem(key)
-    } catch {
-        return null
-    }
-}
-
-function storeAccessToken(key: string, token: string): void {
-    try {
-        localStorage.setItem(key, token)
-    } catch {
-        // Ignore storage errors
-    }
-}
-
-function clearStoredAccessToken(key: string): void {
-    try {
-        localStorage.removeItem(key)
-    } catch {
-        // Ignore storage errors
-    }
 }
 
 export function useAuthSource(baseUrl: string): {

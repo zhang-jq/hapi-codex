@@ -338,7 +338,13 @@ function AppInner() {
     }
 
     return (
-        <AppContextProvider value={{ api, token, baseUrl }}>
+        <AppContextProvider value={{
+            api,
+            token,
+            baseUrl,
+            authSourceType: authSource.type,
+            setBrowserAccessToken: setAccessToken
+        }}>
             <VoiceProvider>
                 <SyncingBanner isSyncing={isSyncing} />
                 <ReconnectingBanner

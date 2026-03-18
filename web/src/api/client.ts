@@ -1,4 +1,5 @@
 import type {
+    AdminOverviewResponse,
     AttachmentMetadata,
     AuthResponse,
     DeleteUploadResponse,
@@ -16,6 +17,7 @@ import type {
     PushSubscriptionPayload,
     PushUnsubscribePayload,
     PushVapidPublicKeyResponse,
+    RotateCliApiTokenResponse,
     SlashCommandsResponse,
     SkillsResponse,
     SpawnResponse,
@@ -164,6 +166,17 @@ export class ApiClient {
 
     async getPushVapidPublicKey(): Promise<PushVapidPublicKeyResponse> {
         return await this.request<PushVapidPublicKeyResponse>('/api/push/vapid-public-key')
+    }
+
+    async getAdminOverview(): Promise<AdminOverviewResponse> {
+        return await this.request<AdminOverviewResponse>('/api/admin/overview')
+    }
+
+    async rotateCliApiToken(): Promise<RotateCliApiTokenResponse> {
+        return await this.request<RotateCliApiTokenResponse>('/api/admin/token/rotate', {
+            method: 'POST',
+            body: JSON.stringify({})
+        })
     }
 
     async subscribePushNotifications(payload: PushSubscriptionPayload): Promise<void> {

@@ -3,6 +3,7 @@ export const queryKeys = {
     session: (sessionId: string) => ['session', sessionId] as const,
     messages: (sessionId: string) => ['messages', sessionId] as const,
     machines: ['machines'] as const,
+    adminOverview: ['admin-overview'] as const,
     importableSessions: (
         machineId: string,
         agent: 'codex',

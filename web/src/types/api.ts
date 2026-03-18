@@ -122,6 +122,50 @@ export type ImportableSessionsResponse = {
     page: ImportableSessionsPage
 }
 
+export type AdminToken = {
+    value: string
+    source: 'env' | 'file' | 'generated'
+    canRotate: boolean
+    reason?: string
+}
+
+export type AdminTailscaleStatus = {
+    installed: boolean
+    running: boolean
+    backendState?: string
+    hostname?: string
+    ips: string[]
+    urls: string[]
+    error?: string
+}
+
+export type AdminOverview = {
+    generatedAt: number
+    config: {
+        listenHost: string
+        listenPort: number
+        publicUrl: string
+        dataDir: string
+        dbPath: string
+        settingsFile: string
+        corsOrigins: string[]
+    }
+    token: AdminToken
+    access: {
+        localUrls: string[]
+        publicUrl: string | null
+        tailscale: AdminTailscaleStatus
+    }
+}
+
+export type AdminOverviewResponse = {
+    overview: AdminOverview
+}
+
+export type RotateCliApiTokenResponse = {
+    token: AdminToken
+}
+
 export type SpawnResponse =
     | { type: 'success'; sessionId: string }
     | { type: 'error'; message: string }

@@ -5,6 +5,8 @@ type AppContextValue = {
     api: ApiClient
     token: string
     baseUrl: string
+    authSourceType: 'telegram' | 'accessToken'
+    setBrowserAccessToken: ((token: string) => void) | null
 }
 
 const AppContext = createContext<AppContextValue | null>(null)

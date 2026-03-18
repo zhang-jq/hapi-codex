@@ -34,6 +34,7 @@ import FilesPage from '@/routes/sessions/files'
 import FilePage from '@/routes/sessions/file'
 import TerminalPage from '@/routes/sessions/terminal'
 import SettingsPage from '@/routes/settings'
+import AdminPage from '@/routes/admin'
 
 function BackIcon(props: { className?: string }) {
     return (
@@ -483,6 +484,12 @@ const settingsRoute = createRoute({
     component: SettingsPage,
 })
 
+const adminRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/admin',
+    component: AdminPage,
+})
+
 export const routeTree = rootRoute.addChildren([
     indexRoute,
     sessionsRoute.addChildren([
@@ -495,6 +502,7 @@ export const routeTree = rootRoute.addChildren([
         ]),
     ]),
     settingsRoute,
+    adminRoute,
 ])
 
 type RouterHistory = Parameters<typeof createRouter>[0]['history']

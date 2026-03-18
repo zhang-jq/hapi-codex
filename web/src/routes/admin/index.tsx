@@ -192,6 +192,38 @@ function SnippetBlock(props: {
 }
 
 type AccessMode = 'local' | 'tailscale' | 'public'
+type TroubleshootingLevel = 'good' | 'warning' | 'critical'
+
+function getHostFromUrl(url: string): string {
+    try {
+        return new URL(url).hostname
+    } catch {
+        return url.replace(/^https?:\/\//, '').split('/')[0] ?? url
+    }
+}
+
+function isIpLikeHost(host: string): boolean {
+    return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':')
+}
+
+function TroubleshootingCard(props: {
+    level: TroubleshootingLevel
+    title: string
+    body: string
+}) {
+    const tone = props.level === 'good'
+        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+        : props.level === 'critical'
+            ? 'border-red-200 bg-red-50 text-red-800'
+            : 'border-amber-200 bg-amber-50 text-amber-800'
+
+    return (
+        <div className={`rounded-xl border px-3 py-3 ${tone}`}>
+            <div className="text-sm font-medium">{props.title}</div>
+            <div className="mt-1 text-sm">{props.body}</div>
+        </div>
+    )
+}
 
 export default function AdminPage() {
     const { api, baseUrl, authSourceType, setBrowserAccessToken } = useAppContext()
@@ -292,12 +324,9 @@ export default function AdminPage() {
         if (!overview?.access.publicUrl) {
             return 'your-hapi.example.com'
         }
-        try {
-            return new URL(overview.access.publicUrl).host
-        } catch {
-            return overview.access.publicUrl.replace(/^https?:\/\//, '')
-        }
+        return getHostFromUrl(overview.access.publicUrl)
     }, [overview?.access.publicUrl])
+    const publicUsesDomain = !isIpLikeHost(publicHost)
 
     const vpsTunnelSnippet = useMemo(() => {
         return `ssh -NT -R 127.0.0.1:13006:127.0.0.1:${overview?.config.listenPort ?? 3006} user@${publicHost}`
@@ -320,6 +349,47 @@ export default function AdminPage() {
     }
 }`
     }, [publicHost])
+
+    const httpsNginxSnippet = useMemo(() => {
+        return `server {
+    listen 80;
+    server_name ${publicHost};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name ${publicHost};
+
+    ssl_certificate /etc/letsencrypt/live/${publicHost}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${publicHost}/privkey.pem;
+
+    client_max_body_size 20m;
+
+    location / {
+        proxy_pass http://127.0.0.1:13006;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+    }
+}
+
+# Then issue the certificate once DNS already points here:
+# certbot --nginx -d ${publicHost}`
+    }, [publicHost])
+
+    const hubEnvSnippet = useMemo(() => {
+        const preferredPublicUrl = overview?.access.publicUrl
+            ? overview.access.publicUrl
+            : publicUsesDomain
+                ? `https://${publicHost}`
+                : `http://${publicHost}`
+        return `HAPI_LISTEN_HOST=0.0.0.0
+HAPI_LISTEN_PORT=${overview?.config.listenPort ?? 3006}
+HAPI_PUBLIC_URL=${preferredPublicUrl}`
+    }, [overview?.access.publicUrl, overview?.config.listenPort, publicHost, publicUsesDomain])
 
     const localLoginLink = overview?.access.localUrls[0]
         ? buildLoginLink(overview.access.localUrls[0])
@@ -347,6 +417,7 @@ export default function AdminPage() {
                     'Open the generated login link below or add it to the teammate browser/PWA.',
                     'If access fails, check the Tailscale status card above first.',
                 ],
+                shareSnippet: `Open this hapi-codex link while connected to the same Tailscale tailnet:\n${tailscaleLoginLink}\n\nIf the page does not open, confirm Tailscale is connected on both devices first.`,
                 snippets: [] as { title: string; code: string }[],
             }
         }
@@ -362,9 +433,12 @@ export default function AdminPage() {
                     'Put nginx (or another proxy) in front of that upstream and point the public URL at it.',
                     'Verify the public URL health result turns green before sharing the login link.',
                 ],
+                shareSnippet: `Open this public hapi-codex link:\n${publicLoginLink}\n\nIf it fails, ask the server owner to check the public health status in Admin & Diagnose.`,
                 snippets: [
+                    { title: 'Hub Environment', code: hubEnvSnippet },
                     { title: 'Reverse SSH Tunnel', code: vpsTunnelSnippet },
                     { title: 'nginx Template', code: vpsNginxSnippet },
+                    ...(publicUsesDomain ? [{ title: 'nginx HTTPS Template', code: httpsNginxSnippet }] : []),
                 ],
             }
         }
@@ -378,17 +452,78 @@ export default function AdminPage() {
                 'Share the LAN URL with the teammate if they are on the same network.',
                 'Use the generated login link so they do not need to type the token manually.',
             ],
+            shareSnippet: `Open this local hapi-codex link while on the same network:\n${localLoginLink}`,
             snippets: [] as { title: string; code: string }[],
         }
     }, [
+        hubEnvSnippet,
+        httpsNginxSnippet,
         localLoginLink,
         overview,
         publicLoginLink,
+        publicUsesDomain,
         selectedMode,
         tailscaleLoginLink,
         vpsNginxSnippet,
         vpsTunnelSnippet,
     ])
+
+    const troubleshootingItems = useMemo(() => {
+        const items: Array<{ level: TroubleshootingLevel; title: string; body: string }> = []
+
+        if (onlineMachines === 0) {
+            items.push({
+                level: 'critical',
+                title: 'No runner is connected',
+                body: 'The hub is up, but no machine is registered. Start or restart the runner on the machine that should execute Codex sessions.',
+            })
+        }
+
+        if (overview?.access.tailscale.installed && !overview.access.tailscale.running) {
+            items.push({
+                level: 'warning',
+                title: 'Tailscale is installed but not connected',
+                body: `Reconnect Tailscale first${overview.access.tailscale.backendState ? ` (${overview.access.tailscale.backendState})` : ''}. Until then, teammates outside the LAN should use the public path instead.`,
+            })
+        }
+
+        if (!overview?.access.tailscale.installed) {
+            items.push({
+                level: 'warning',
+                title: 'Tailscale is not installed',
+                body: 'If you want the recommended teammate workflow, install Tailscale on this Mac and the teammate device so they can connect without a VPS.',
+            })
+        }
+
+        if (overview?.access.publicUrl && overview.access.publicHealth && !overview.access.publicHealth.ok) {
+            const httpHint = overview.access.publicHealth.status === 502
+                ? 'This usually means the reverse proxy is reachable but its upstream tunnel is down or misconfigured.'
+                : 'The public URL is not healthy right now.'
+            items.push({
+                level: 'critical',
+                title: 'Public URL is unhealthy',
+                body: `${httpHint} Check the reverse SSH tunnel, nginx upstream, and server logs before sharing the public link.`,
+            })
+        }
+
+        if (overview?.access.publicUrl && !publicUsesDomain) {
+            items.push({
+                level: 'warning',
+                title: 'Public URL is using an IP address',
+                body: 'That works for plain HTTP, but HTTPS and certificates are much easier once you move this to a real domain name.',
+            })
+        }
+
+        if (items.length === 0) {
+            items.push({
+                level: 'good',
+                title: 'Main access paths look healthy',
+                body: 'At least one remote path is ready. You can now share the generated login link with a teammate.',
+            })
+        }
+
+        return items
+    }, [onlineMachines, overview, publicUsesDomain])
 
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--app-bg)]">
@@ -561,8 +696,32 @@ export default function AdminPage() {
                                             onCopy={copyText}
                                         />
                                     ))}
+
+                                    {accessModeContent.shareSnippet ? (
+                                        <SnippetBlock
+                                            title="Teammate Share Message"
+                                            code={accessModeContent.shareSnippet}
+                                            onCopy={copyText}
+                                        />
+                                    ) : null}
                                 </div>
                             ) : null}
+                        </div>
+                    </AdminCard>
+
+                    <AdminCard
+                        title="Troubleshooting"
+                        description="This is the first place teammates should look when the login link or remote session path does not work."
+                    >
+                        <div className="space-y-3">
+                            {troubleshootingItems.map((item) => (
+                                <TroubleshootingCard
+                                    key={`${item.level}-${item.title}`}
+                                    level={item.level}
+                                    title={item.title}
+                                    body={item.body}
+                                />
+                            ))}
                         </div>
                     </AdminCard>
 

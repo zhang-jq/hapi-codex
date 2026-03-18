@@ -20,6 +20,7 @@ import { AppServerEventConverter } from './utils/appServerEventConverter';
 import { registerAppServerPermissionHandlers } from './utils/appServerPermissionAdapter';
 import { buildThreadStartParams, buildTurnStartParams } from './utils/appServerConfig';
 import { shouldIgnoreTerminalEvent } from './utils/terminalEventGuard';
+import { persistCodexImageAttachments } from './utils/persistCodexImageAttachments';
 import {
     decodeQueuedCodexUserMessage,
     formatQueuedCodexUserMessageForDisplay
@@ -710,10 +711,14 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
                         this.currentThreadId = threadId;
                         session.onSessionFound(threadId);
 
+                        const persistedAttachments = await persistCodexImageAttachments({
+                            sessionId: threadId,
+                            attachments: queuedUserMessage.attachments
+                        });
                         const turnParams = buildTurnStartParams({
                             threadId,
                             message: queuedUserMessage.text,
-                            attachments: queuedUserMessage.attachments,
+                            attachments: persistedAttachments,
                             mode: message.mode,
                             cliOverrides: session.codexCliOverrides
                         });
@@ -753,10 +758,14 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
                         continue;
                     }
 
+                    const persistedAttachments = await persistCodexImageAttachments({
+                        sessionId: this.currentThreadId,
+                        attachments: queuedUserMessage.attachments
+                    });
                     const turnParams = buildTurnStartParams({
                         threadId: this.currentThreadId,
                         message: queuedUserMessage.text,
-                        attachments: queuedUserMessage.attachments,
+                        attachments: persistedAttachments,
                         mode: message.mode,
                         cliOverrides: session.codexCliOverrides
                     });

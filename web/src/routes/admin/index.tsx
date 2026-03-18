@@ -6,6 +6,7 @@ import { useAppGoBack } from '@/hooks/useAppGoBack'
 import { useAdminOverview } from '@/hooks/queries/useAdminOverview'
 import { useMachines } from '@/hooks/queries/useMachines'
 import { useSessions } from '@/hooks/queries/useSessions'
+import { useTranslation } from '@/lib/use-translation'
 import { useToast } from '@/lib/toast-context'
 import { queryKeys } from '@/lib/query-keys'
 import { LoadingState } from '@/components/LoadingState'
@@ -177,12 +178,14 @@ function PolicyToggleCard(props: {
     onToggle: () => void
     onSetPreferred: () => void
 }) {
+    const { t } = useTranslation()
+
     return (
         <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-[var(--app-fg)]">{ACCESS_MODE_LABELS[props.mode]}</div>
-                    <div className="mt-1 text-xs text-[var(--app-hint)]">{ACCESS_MODE_HINTS[props.mode]}</div>
+                    <div className="text-sm font-medium text-[var(--app-fg)]">{t(ACCESS_MODE_LABEL_KEYS[props.mode])}</div>
+                    <div className="mt-1 text-xs text-[var(--app-hint)]">{t(ACCESS_MODE_HINT_KEYS[props.mode])}</div>
                 </div>
                 <button
                     type="button"
@@ -194,16 +197,16 @@ function PolicyToggleCard(props: {
                             : 'border border-[var(--app-border)] text-[var(--app-fg)] hover:bg-[var(--app-subtle-bg)]'
                     } ${props.enabled && !props.canDisable ? 'opacity-70' : ''}`}
                 >
-                    {props.enabled ? 'Enabled' : 'Disabled'}
+                    {props.enabled ? t('admin.policy.enabled') : t('admin.policy.disabled')}
                 </button>
             </div>
             <div className="mt-3 flex items-center justify-between gap-3">
                 <div className="text-xs text-[var(--app-hint)]">
                     {props.enabled
                         ? (props.preferred
-                            ? 'This is the default mode shown to users first.'
-                            : 'Enabled, but not the default recommendation.')
-                        : 'Disabled modes stay visible for admin diagnostics, but disappear from the teammate guide.'}
+                            ? t('admin.policy.defaultShown')
+                            : t('admin.policy.enabledButNotDefault'))
+                        : t('admin.policy.hiddenFromGuide')}
                 </div>
                 <button
                     type="button"
@@ -211,7 +214,7 @@ function PolicyToggleCard(props: {
                     disabled={!props.enabled || props.preferred}
                     className="rounded-full border border-[var(--app-border)] px-3 py-1.5 text-xs text-[var(--app-fg)] transition-colors hover:bg-[var(--app-subtle-bg)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                    {props.preferred ? 'Default' : 'Set default'}
+                    {props.preferred ? t('admin.policy.default') : t('admin.policy.setDefault')}
                 </button>
             </div>
         </div>
@@ -244,16 +247,16 @@ function SnippetBlock(props: {
 type TroubleshootingLevel = 'good' | 'warning' | 'critical'
 const ACCESS_MODES: AdminAccessMode[] = ['local', 'tailscale', 'public']
 
-const ACCESS_MODE_LABELS: Record<AdminAccessMode, string> = {
-    local: 'Local / LAN',
-    tailscale: 'Tailscale',
-    public: 'Public / VPS',
+const ACCESS_MODE_LABEL_KEYS: Record<AdminAccessMode, string> = {
+    local: 'admin.mode.local.label',
+    tailscale: 'admin.mode.tailscale.label',
+    public: 'admin.mode.public.label',
 }
 
-const ACCESS_MODE_HINTS: Record<AdminAccessMode, string> = {
-    local: 'Same machine or same LAN only.',
-    tailscale: 'Recommended private remote access for teammates in the same tailnet.',
-    public: 'Use your own server or public reverse proxy as a fallback.',
+const ACCESS_MODE_HINT_KEYS: Record<AdminAccessMode, string> = {
+    local: 'admin.mode.local.hint',
+    tailscale: 'admin.mode.tailscale.hint',
+    public: 'admin.mode.public.hint',
 }
 
 function getHostFromUrl(url: string): string {
@@ -292,6 +295,7 @@ export default function AdminPage() {
     const goBack = useAppGoBack()
     const navigate = useNavigate()
     const queryClient = useQueryClient()
+    const { t } = useTranslation()
     const { addToast } = useToast()
     const { overview, isLoading, error, refetch } = useAdminOverview(api)
     const {
@@ -308,6 +312,7 @@ export default function AdminPage() {
     const [selectedMode, setSelectedMode] = useState<AdminAccessMode>('local')
     const [draftEnabledModes, setDraftEnabledModes] = useState<AdminAccessMode[]>(ACCESS_MODES)
     const [draftPreferredMode, setDraftPreferredMode] = useState<AdminAccessMode>('tailscale')
+    const getModeLabel = (mode: AdminAccessMode) => t(ACCESS_MODE_LABEL_KEYS[mode])
 
     const rotateTokenMutation = useMutation({
         mutationFn: async () => {
@@ -324,8 +329,8 @@ export default function AdminPage() {
             }
             await queryClient.invalidateQueries({ queryKey: queryKeys.adminOverview })
             addToast({
-                title: 'Access token rotated',
-                body: 'The new token has been saved for this browser. Update any old external links as needed.',
+                title: t('admin.token.rotatedTitle'),
+                body: t('admin.token.rotatedBody'),
                 sessionId: '',
                 url: ''
             })
@@ -345,15 +350,18 @@ export default function AdminPage() {
         onSuccess: async (result) => {
             await queryClient.invalidateQueries({ queryKey: queryKeys.adminOverview })
             addToast({
-                title: 'Access policy saved',
-                body: `Enabled: ${result.accessPolicy.enabledModes.map((mode) => ACCESS_MODE_LABELS[mode]).join(', ')} · Default: ${ACCESS_MODE_LABELS[result.accessPolicy.preferredMode]}`,
+                title: t('admin.policy.savedTitle'),
+                body: t('admin.policy.summary', {
+                    enabled: result.accessPolicy.enabledModes.map((mode) => getModeLabel(mode)).join(', '),
+                    preferred: getModeLabel(result.accessPolicy.preferredMode),
+                }),
                 sessionId: '',
                 url: ''
             })
         },
         onError: (mutationError) => {
             addToast({
-                title: 'Failed to save access policy',
+                title: t('admin.policy.failedTitle'),
                 body: mutationError instanceof Error ? mutationError.message : 'Unknown error',
                 sessionId: '',
                 url: ''
@@ -414,14 +422,14 @@ export default function AdminPage() {
         try {
             await navigator.clipboard.writeText(value)
             addToast({
-                title: `${label} copied`,
+                title: t('admin.copy.copied', { label }),
                 body: value,
                 sessionId: '',
                 url: ''
             })
         } catch (copyError) {
             addToast({
-                title: `Failed to copy ${label}`,
+                title: t('admin.copy.failed', { label }),
                 body: copyError instanceof Error ? copyError.message : 'Clipboard is unavailable.',
                 sessionId: '',
                 url: ''
@@ -438,8 +446,8 @@ export default function AdminPage() {
         if (draftEnabledModes.includes(mode)) {
             if (draftEnabledModes.length === 1) {
                 addToast({
-                    title: 'Keep one access mode enabled',
-                    body: 'At least one access path must stay available for users.',
+                    title: t('admin.policy.keepOneTitle'),
+                    body: t('admin.policy.keepOneBody'),
                     sessionId: '',
                     url: ''
                 })
@@ -551,51 +559,51 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
 
         if (selectedMode === 'tailscale') {
             return {
-                summary: 'Recommended for teammates inside the same tailnet. No VPS is required and the route is usually the most stable.',
+                summary: t('admin.mode.tailscale.summary'),
                 health: overview.access.tailscale.health,
                 link: tailscaleLoginLink,
                 steps: [
-                    'Install Tailscale on the Mac running hapi-codex and on the teammate device.',
-                    'Sign both devices into the same tailnet.',
-                    'Open the generated login link below or add it to the teammate browser/PWA.',
-                    'If access fails, check the Tailscale status card above first.',
+                    t('admin.mode.tailscale.step1'),
+                    t('admin.mode.tailscale.step2'),
+                    t('admin.mode.tailscale.step3'),
+                    t('admin.mode.tailscale.step4'),
                 ],
-                shareSnippet: `Open this hapi-codex link while connected to the same Tailscale tailnet:\n${tailscaleLoginLink}\n\nIf the page does not open, confirm Tailscale is connected on both devices first.`,
+                shareSnippet: t('admin.mode.tailscale.share', { link: tailscaleLoginLink }),
                 snippets: [] as { title: string; code: string }[],
             }
         }
 
         if (selectedMode === 'public') {
             return {
-                summary: 'Use this when teammates are outside your tailnet. This page does not SSH into the server for you; it generates the template your teammate can follow.',
+                summary: t('admin.mode.public.summary'),
                 health: overview.access.publicHealth,
                 link: publicLoginLink,
                 steps: [
-                    'Keep the hub listening locally on this Mac.',
-                    'Expose the hub to the VPS with a reverse tunnel or another private upstream.',
-                    'Put nginx (or another proxy) in front of that upstream and point the public URL at it.',
-                    'Verify the public URL health result turns green before sharing the login link.',
+                    t('admin.mode.public.step1'),
+                    t('admin.mode.public.step2'),
+                    t('admin.mode.public.step3'),
+                    t('admin.mode.public.step4'),
                 ],
-                shareSnippet: `Open this public hapi-codex link:\n${publicLoginLink}\n\nIf it fails, ask the server owner to check the public health status in Admin & Diagnose.`,
+                shareSnippet: t('admin.mode.public.share', { link: publicLoginLink }),
                 snippets: [
-                    { title: 'Hub Environment', code: hubEnvSnippet },
-                    { title: 'Reverse SSH Tunnel', code: vpsTunnelSnippet },
-                    { title: 'nginx Template', code: vpsNginxSnippet },
-                    ...(publicUsesDomain ? [{ title: 'nginx HTTPS Template', code: httpsNginxSnippet }] : []),
+                    { title: t('admin.snippet.hubEnv'), code: hubEnvSnippet },
+                    { title: t('admin.snippet.reverseSsh'), code: vpsTunnelSnippet },
+                    { title: t('admin.snippet.nginxTemplate'), code: vpsNginxSnippet },
+                    ...(publicUsesDomain ? [{ title: t('admin.snippet.nginxHttpsTemplate'), code: httpsNginxSnippet }] : []),
                 ],
             }
         }
 
         return {
-            summary: 'Best for the same LAN or direct testing on this machine.',
+            summary: t('admin.mode.local.summary'),
             health: null,
             link: localLoginLink,
             steps: [
-                'Keep the hub and runner running on this Mac.',
-                'Share the LAN URL with the teammate if they are on the same network.',
-                'Use the generated login link so they do not need to type the token manually.',
+                t('admin.mode.local.step1'),
+                t('admin.mode.local.step2'),
+                t('admin.mode.local.step3'),
             ],
-            shareSnippet: `Open this local hapi-codex link while on the same network:\n${localLoginLink}`,
+            shareSnippet: t('admin.mode.local.share', { link: localLoginLink }),
             snippets: [] as { title: string; code: string }[],
         }
     }, [
@@ -607,6 +615,7 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
         publicUsesDomain,
         selectedMode,
         tailscaleLoginLink,
+        t,
         vpsNginxSnippet,
         vpsTunnelSnippet,
     ])
@@ -619,56 +628,58 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
         if (onlineMachines === 0) {
             items.push({
                 level: 'critical',
-                title: 'No runner is connected',
-                body: 'The hub is up, but no machine is registered. Start or restart the runner on the machine that should execute Codex sessions.',
+                title: t('admin.troubleshooting.noRunnerTitle'),
+                body: t('admin.troubleshooting.noRunnerBody'),
             })
         }
 
         if (tailscaleModeEnabled && overview?.access.tailscale.installed && !overview.access.tailscale.running) {
             items.push({
                 level: 'warning',
-                title: 'Tailscale is installed but not connected',
-                body: `Reconnect Tailscale first${overview.access.tailscale.backendState ? ` (${overview.access.tailscale.backendState})` : ''}. Until then, teammates outside the LAN should use the public path instead.`,
+                title: t('admin.troubleshooting.tailscaleDisconnectedTitle'),
+                body: t('admin.troubleshooting.tailscaleDisconnectedBody', {
+                    state: overview.access.tailscale.backendState ? ` (${overview.access.tailscale.backendState})` : '',
+                }),
             })
         }
 
         if (tailscaleModeEnabled && !overview?.access.tailscale.installed) {
             items.push({
                 level: 'warning',
-                title: 'Tailscale is not installed',
-                body: 'If you want the recommended teammate workflow, install Tailscale on this Mac and the teammate device so they can connect without a VPS.',
+                title: t('admin.troubleshooting.tailscaleMissingTitle'),
+                body: t('admin.troubleshooting.tailscaleMissingBody'),
             })
         }
 
         if (publicModeEnabled && overview?.access.publicUrl && overview.access.publicHealth && !overview.access.publicHealth.ok) {
             const httpHint = overview.access.publicHealth.status === 502
-                ? 'This usually means the reverse proxy is reachable but its upstream tunnel is down or misconfigured.'
-                : 'The public URL is not healthy right now.'
+                ? t('admin.troubleshooting.publicUnhealthyHint502')
+                : t('admin.troubleshooting.publicUnhealthyHintGeneric')
             items.push({
                 level: 'critical',
-                title: 'Public URL is unhealthy',
-                body: `${httpHint} Check the reverse SSH tunnel, nginx upstream, and server logs before sharing the public link.`,
+                title: t('admin.troubleshooting.publicUnhealthyTitle'),
+                body: t('admin.troubleshooting.publicUnhealthyBody', { hint: httpHint }),
             })
         }
 
         if (publicModeEnabled && overview?.access.publicUrl && !publicUsesDomain) {
             items.push({
                 level: 'warning',
-                title: 'Public URL is using an IP address',
-                body: 'That works for plain HTTP, but HTTPS and certificates are much easier once you move this to a real domain name.',
+                title: t('admin.troubleshooting.publicIpTitle'),
+                body: t('admin.troubleshooting.publicIpBody'),
             })
         }
 
         if (items.length === 0) {
             items.push({
                 level: 'good',
-                title: 'Main access paths look healthy',
-                body: 'At least one remote path is ready. You can now share the generated login link with a teammate.',
+                title: t('admin.troubleshooting.healthyTitle'),
+                body: t('admin.troubleshooting.healthyBody'),
             })
         }
 
         return items
-    }, [onlineMachines, overview, publicUsesDomain])
+    }, [onlineMachines, overview, publicUsesDomain, t])
 
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--app-bg)]">
@@ -682,8 +693,8 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                         <BackIcon />
                     </button>
                     <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-[var(--app-fg)]">Admin & Diagnose</div>
-                        <div className="text-xs text-[var(--app-hint)]">Manage sessions, connection entrypoints, and self-host diagnostics.</div>
+                        <div className="font-semibold text-[var(--app-fg)]">{t('admin.title')}</div>
+                        <div className="text-xs text-[var(--app-hint)]">{t('admin.subtitle')}</div>
                     </div>
                     <button
                         type="button"
@@ -691,7 +702,7 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                         className="inline-flex items-center gap-1 rounded-full border border-[var(--app-border)] px-3 py-1.5 text-sm text-[var(--app-fg)] transition-colors hover:bg-[var(--app-subtle-bg)]"
                     >
                         <RefreshIcon />
-                        Refresh
+                        {t('admin.refresh')}
                     </button>
                 </div>
             </div>
@@ -700,7 +711,7 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                 <div className="mx-auto flex w-full max-w-content flex-col gap-4 px-3 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
                     {isLoading ? (
                         <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-bg)] px-4 py-10">
-                            <LoadingState label="Loading admin overview…" className="text-sm" />
+                            <LoadingState label={t('admin.loadingOverview')} className="text-sm" />
                         </div>
                     ) : null}
 
@@ -711,63 +722,65 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                     ) : null}
 
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        <StatTile label="Sessions" value={`${sessions.length}`} hint={`${activeSessions} active`} />
-                        <StatTile label="Imported from Codex" value={`${importedSessions}`} hint="Desktop / CLI resumes" />
-                        <StatTile label="Machines online" value={`${onlineMachines}`} hint={`${runnerMachines} runner registered`} />
+                        <StatTile label={t('admin.stats.sessions')} value={`${sessions.length}`} hint={t('admin.stats.sessionsHint', { count: activeSessions })} />
+                        <StatTile label={t('admin.stats.imported')} value={`${importedSessions}`} hint={t('admin.stats.importedHint')} />
+                        <StatTile label={t('admin.stats.onlineMachines')} value={`${onlineMachines}`} hint={t('admin.stats.onlineMachinesHint', { count: runnerMachines })} />
                         <StatTile
-                            label="Current hub"
+                            label={t('admin.stats.currentHub')}
                             value={baseUrl.replace(/^https?:\/\//, '')}
-                            hint={overview?.config.publicUrl ? 'Public URL configured' : 'Using direct access'}
+                            hint={overview?.config.publicUrl ? t('admin.stats.publicConfigured') : t('admin.stats.directAccess')}
                         />
                     </div>
 
                     <AdminCard
-                        title="Access"
-                        description="Detected entrypoints, runtime health, and URLs you can still use for diagnostics."
+                        title={t('admin.access.title')}
+                        description={t('admin.access.description')}
                     >
                         <div className="space-y-3">
-                            <UrlRow label="Current hub" value={baseUrl} onCopy={copyText} />
+                            <UrlRow label={t('admin.access.currentHub')} value={baseUrl} onCopy={copyText} />
                             {overview?.access.publicUrl ? (
-                                <UrlRow label="Public URL" value={overview.access.publicUrl} onCopy={copyText} />
+                                <UrlRow label={t('admin.access.publicUrl')} value={overview.access.publicUrl} onCopy={copyText} />
                             ) : null}
                             {overview?.access.localUrls.map((url) => (
-                                <UrlRow key={url} label="Local URL" value={url} onCopy={copyText} />
+                                <UrlRow key={url} label={t('admin.access.localUrl')} value={url} onCopy={copyText} />
                             ))}
                             {overview?.access.tailscale.urls.map((url) => (
-                                <UrlRow key={url} label="Tailscale URL" value={url} onCopy={copyText} />
+                                <UrlRow key={url} label={t('admin.access.tailscaleUrl')} value={url} onCopy={copyText} />
                             ))}
                             {!overview?.access.tailscale.installed ? (
                                 <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3 text-sm text-[var(--app-hint)]">
-                                    Tailscale CLI is not installed on this machine yet.
+                                    {t('admin.access.tailscaleMissing')}
                                 </div>
                             ) : null}
                             {overview?.access.tailscale.installed && !overview.access.tailscale.running ? (
                                 <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3 text-sm text-[var(--app-hint)]">
-                                    Tailscale is installed but not connected{overview.access.tailscale.backendState ? ` (${overview.access.tailscale.backendState})` : ''}.
+                                    {t('admin.access.tailscaleDisconnected', {
+                                        state: overview.access.tailscale.backendState ? ` (${overview.access.tailscale.backendState})` : '',
+                                    })}
                                     {overview.access.tailscale.error ? ` ${overview.access.tailscale.error}` : ''}
                                 </div>
                             ) : null}
                             {overview?.access.publicUrl && overview.access.publicHealth ? (
                                 <div className="flex items-center justify-between rounded-xl border border-[var(--app-divider)] px-3 py-3">
                                     <div>
-                                        <div className="text-sm text-[var(--app-fg)]">Public URL health</div>
+                                        <div className="text-sm text-[var(--app-fg)]">{t('admin.access.publicHealth')}</div>
                                         <div className="mt-1 text-xs text-[var(--app-hint)]">{overview.access.publicHealth.message}</div>
                                     </div>
                                     <StatusBadge
                                         ok={overview.access.publicHealth.ok}
-                                        label={overview.access.publicHealth.ok ? 'Healthy' : 'Needs attention'}
+                                        label={overview.access.publicHealth.ok ? t('admin.health.healthy') : t('admin.health.needsAttention')}
                                     />
                                 </div>
                             ) : null}
                             {overview?.access.tailscale.health ? (
                                 <div className="flex items-center justify-between rounded-xl border border-[var(--app-divider)] px-3 py-3">
                                     <div>
-                                        <div className="text-sm text-[var(--app-fg)]">Tailscale health</div>
+                                        <div className="text-sm text-[var(--app-fg)]">{t('admin.access.tailscaleHealth')}</div>
                                         <div className="mt-1 text-xs text-[var(--app-hint)]">{overview.access.tailscale.health.message}</div>
                                     </div>
                                     <StatusBadge
                                         ok={overview.access.tailscale.health.ok}
-                                        label={overview.access.tailscale.health.ok ? 'Healthy' : 'Needs attention'}
+                                        label={overview.access.tailscale.health.ok ? t('admin.health.healthy') : t('admin.health.needsAttention')}
                                     />
                                 </div>
                             ) : null}
@@ -775,8 +788,8 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                     </AdminCard>
 
                     <AdminCard
-                        title="Access Policy"
-                        description="Choose which schemes users should see in the connection guide, and which one is recommended by default."
+                        title={t('admin.policy.title')}
+                        description={t('admin.policy.description')}
                         actions={(
                             <button
                                 type="button"
@@ -784,7 +797,7 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                                 disabled={!draftPolicyIsDirty || updateAccessPolicyMutation.isPending}
                                 className="rounded-full border border-[var(--app-border)] px-3 py-1.5 text-sm text-[var(--app-fg)] transition-colors hover:bg-[var(--app-subtle-bg)] disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                {updateAccessPolicyMutation.isPending ? 'Saving…' : 'Save'}
+                                {updateAccessPolicyMutation.isPending ? t('admin.policy.saving') : t('admin.policy.save')}
                             </button>
                         )}
                     >
@@ -801,22 +814,24 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                                 />
                             ))}
                             <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3 text-xs text-[var(--app-hint)]">
-                                Enabled modes: {draftEnabledModes.map((mode) => ACCESS_MODE_LABELS[mode]).join(', ')}.
-                                {' '}Default recommendation: {ACCESS_MODE_LABELS[draftPreferredMode]}.
+                                {t('admin.policy.summary', {
+                                    enabled: draftEnabledModes.map((mode) => getModeLabel(mode)).join(', '),
+                                    preferred: getModeLabel(draftPreferredMode),
+                                })}
                             </div>
                         </div>
                     </AdminCard>
 
                     <AdminCard
-                        title="Connection Guide"
-                        description="Use this to onboard another teammate. Pick the access mode first, then copy the generated login link or server template."
+                        title={t('admin.guide.title')}
+                        description={t('admin.guide.description')}
                     >
                         <div className="space-y-4">
                             <div className="flex flex-wrap gap-2">
                                 {enabledGuideModes.map((mode) => (
                                     <ModeButton
                                         key={mode}
-                                        label={ACCESS_MODE_LABELS[mode]}
+                                        label={getModeLabel(mode)}
                                         active={selectedMode === mode}
                                         onClick={() => setSelectedMode(mode)}
                                     />
@@ -828,12 +843,12 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                                     <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3">
                                         <div className="flex flex-wrap items-center gap-2">
                                             <div className="text-sm font-medium text-[var(--app-fg)]">
-                                                {selectedMode === configuredPreferredMode ? 'Current default recommendation' : 'Current mode'}
+                                                {selectedMode === configuredPreferredMode ? t('admin.guide.currentDefault') : t('admin.guide.currentMode')}
                                             </div>
                                             {accessModeContent.health ? (
                                                 <StatusBadge
                                                     ok={accessModeContent.health.ok}
-                                                    label={accessModeContent.health.ok ? 'Healthy' : 'Check setup'}
+                                                    label={accessModeContent.health.ok ? t('admin.health.healthy') : t('admin.health.checkSetup')}
                                                 />
                                             ) : null}
                                         </div>
@@ -842,18 +857,18 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
 
                                     {accessModeContent.link ? (
                                         <UrlRow
-                                            label="Teammate login link"
+                                            label={t('admin.guide.loginLink')}
                                             value={accessModeContent.link}
                                             onCopy={copyText}
                                         />
                                     ) : (
                                         <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3 text-sm text-[var(--app-hint)]">
-                                            No login link is available for this mode yet.
+                                            {t('admin.guide.noLink')}
                                         </div>
                                     )}
 
                                     <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3">
-                                        <div className="text-sm font-medium text-[var(--app-fg)]">How to use this mode</div>
+                                        <div className="text-sm font-medium text-[var(--app-fg)]">{t('admin.guide.howToUse')}</div>
                                         <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm text-[var(--app-hint)]">
                                             {accessModeContent.steps.map((step) => (
                                                 <li key={step}>{step}</li>
@@ -872,7 +887,7 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
 
                                     {accessModeContent.shareSnippet ? (
                                         <SnippetBlock
-                                            title="Teammate Share Message"
+                                            title={t('admin.guide.shareMessage')}
                                             code={accessModeContent.shareSnippet}
                                             onCopy={copyText}
                                         />
@@ -883,8 +898,8 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                     </AdminCard>
 
                     <AdminCard
-                        title="Troubleshooting"
-                        description="This is the first place teammates should look when the login link or remote session path does not work."
+                        title={t('admin.troubleshooting.title')}
+                        description={t('admin.troubleshooting.description')}
                     >
                         <div className="space-y-3">
                             {troubleshootingItems.map((item) => (
@@ -899,8 +914,8 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                     </AdminCard>
 
                     <AdminCard
-                        title="Access Token"
-                        description="Use this token for browser or PWA login. Rotating it will invalidate old direct-access links."
+                        title={t('admin.token.title')}
+                        description={t('admin.token.description')}
                         actions={overview?.token.canRotate ? (
                             <button
                                 type="button"
@@ -908,13 +923,13 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                                 disabled={rotateTokenMutation.isPending}
                                 className="rounded-full border border-[var(--app-border)] px-3 py-1.5 text-sm text-[var(--app-fg)] transition-colors hover:bg-[var(--app-subtle-bg)] disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                {rotateTokenMutation.isPending ? 'Rotating…' : 'Rotate'}
+                                {rotateTokenMutation.isPending ? t('admin.token.rotating') : t('admin.token.rotate')}
                             </button>
                         ) : null}
                     >
                         <div className="space-y-3">
                             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--app-hint)]">
-                                <span>Source: {overview?.token.source ?? 'unknown'}</span>
+                                <span>{t('admin.token.source')}: {overview?.token.source ?? t('admin.token.unknown')}</span>
                                 {overview?.token.canRotate ? null : (
                                     <span>{overview?.token.reason}</span>
                                 )}
@@ -931,27 +946,27 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                                     onClick={() => setShowToken((value) => !value)}
                                     className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm text-[var(--app-fg)] transition-colors hover:bg-[var(--app-subtle-bg)]"
                                 >
-                                    {showToken ? 'Hide' : 'Show'}
+                                    {showToken ? t('admin.token.hide') : t('admin.token.show')}
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => void copyText(overview?.token.value ?? '', 'Access token')}
+                                    onClick={() => void copyText(overview?.token.value ?? '', t('admin.token.title'))}
                                     className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm text-[var(--app-fg)] transition-colors hover:bg-[var(--app-subtle-bg)]"
                                 >
-                                    Copy
+                                    {t('admin.copy.button')}
                                 </button>
                             </div>
                         </div>
                     </AdminCard>
 
                     <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-                        <AdminCard title="Recent Sessions" description="Quick overview of active, archived, and imported conversations.">
+                        <AdminCard title={t('admin.sessions.title')} description={t('admin.sessions.description')}>
                             {sessionsLoading ? (
-                                <LoadingState label="Loading sessions…" className="text-sm" />
+                                <LoadingState label={t('admin.sessions.loading')} className="text-sm" />
                             ) : sessionsError ? (
                                 <div className="text-sm text-red-600">{sessionsError}</div>
                             ) : recentSessions.length === 0 ? (
-                                <div className="text-sm text-[var(--app-hint)]">No sessions yet.</div>
+                                <div className="text-sm text-[var(--app-hint)]">{t('admin.sessions.empty')}</div>
                             ) : (
                                 <div className="space-y-2">
                                     {recentSessions.map((session) => {
@@ -960,8 +975,10 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                                             || session.metadata?.path
                                             || session.id
                                         const hint = [
-                                            session.active ? 'active' : 'archived',
-                                            session.metadata?.sessionOrigin === 'imported' ? `imported from ${session.metadata.importedFrom ?? 'Codex'}` : 'spawned in HAPI',
+                                            session.active ? t('admin.sessions.active') : t('admin.sessions.archived'),
+                                            session.metadata?.sessionOrigin === 'imported'
+                                                ? t('admin.sessions.importedFrom', { source: session.metadata.importedFrom ?? 'Codex' })
+                                                : t('admin.sessions.spawnedInHapi'),
                                         ].join(' · ')
                                         return (
                                             <button
@@ -987,15 +1004,15 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                             )}
                         </AdminCard>
 
-                        <AdminCard title="Machines & Runtime" description="Hub status, runner connections, and local config paths.">
+                        <AdminCard title={t('admin.runtime.title')} description={t('admin.runtime.description')}>
                             <div className="space-y-3">
                                 {machinesLoading ? (
-                                    <LoadingState label="Loading machines…" className="text-sm" />
+                                    <LoadingState label={t('admin.runtime.loading')} className="text-sm" />
                                 ) : machinesError ? (
                                     <div className="text-sm text-red-600">{machinesError}</div>
                                 ) : machines.length === 0 ? (
                                     <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3 text-sm text-[var(--app-hint)]">
-                                        No runner is connected right now.
+                                        {t('admin.runtime.noRunner')}
                                     </div>
                                 ) : (
                                     machines.map((machine) => (
@@ -1004,12 +1021,12 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                                                 {machine.metadata?.displayName || machine.metadata?.host || machine.id}
                                             </div>
                                             <div className="mt-1 text-xs text-[var(--app-hint)]">
-                                                {machine.active ? 'online' : 'offline'} · {machine.metadata?.platform ?? 'unknown platform'} · version {machine.metadata?.happyCliVersion ?? 'unknown'}
+                                                {machine.active ? t('misc.online') : t('misc.offline')} · {machine.metadata?.platform ?? t('admin.runtime.unknownPlatform')} · {t('admin.runtime.version')} {machine.metadata?.happyCliVersion ?? t('admin.token.unknown')}
                                             </div>
                                             {machine.runnerState?.pid ? (
                                                 <div className="mt-1 text-xs text-[var(--app-hint)]">
-                                                    runner pid {machine.runnerState.pid}
-                                                    {machine.runnerState.httpPort ? ` · port ${machine.runnerState.httpPort}` : ''}
+                                                    {t('admin.runtime.runnerPid', { pid: machine.runnerState.pid })}
+                                                    {machine.runnerState.httpPort ? ` · ${t('admin.runtime.port', { port: machine.runnerState.httpPort })}` : ''}
                                                 </div>
                                             ) : null}
                                         </div>
@@ -1018,11 +1035,11 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
 
                                 {overview ? (
                                     <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3 text-xs text-[var(--app-hint)]">
-                                        <div>Listen: {overview.config.listenHost}:{overview.config.listenPort}</div>
-                                        <div className="mt-1 break-all">Settings: {overview.config.settingsFile}</div>
-                                        <div className="mt-1 break-all">Data: {overview.config.dataDir}</div>
-                                        <div className="mt-1 break-all">Database: {overview.config.dbPath}</div>
-                                        <div className="mt-1 break-all">CORS: {overview.config.corsOrigins.join(', ') || 'none'}</div>
+                                        <div>{t('admin.runtime.listen')}: {overview.config.listenHost}:{overview.config.listenPort}</div>
+                                        <div className="mt-1 break-all">{t('admin.runtime.settings')}: {overview.config.settingsFile}</div>
+                                        <div className="mt-1 break-all">{t('admin.runtime.data')}: {overview.config.dataDir}</div>
+                                        <div className="mt-1 break-all">{t('admin.runtime.database')}: {overview.config.dbPath}</div>
+                                        <div className="mt-1 break-all">{t('admin.runtime.cors')}: {overview.config.corsOrigins.join(', ') || t('admin.runtime.none')}</div>
                                     </div>
                                 ) : null}
                             </div>

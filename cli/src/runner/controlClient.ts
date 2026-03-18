@@ -11,6 +11,15 @@ import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { isBunCompiled, projectPath } from '@/projectPath';
 import { isProcessAlive, killProcess } from '@/utils/process';
+import { configuration } from '@/configuration';
+
+function normalizeApiUrl(url: string | undefined): string | null {
+  if (!url) {
+    return null;
+  }
+
+  return url.trim().replace(/\/+$/, '') || null;
+}
 
 export function getInstalledCliMtimeMs(): number | undefined {
   if (isBunCompiled()) {
@@ -169,6 +178,13 @@ export async function isRunnerRunningCurrentlyInstalledHappyVersion(): Promise<b
   const state = await readRunnerState();
   if (!state) {
     logger.debug('[RUNNER CONTROL] No runner state found, returning false');
+    return false;
+  }
+
+  const currentApiUrl = normalizeApiUrl(configuration.apiUrl);
+  const runnerApiUrl = normalizeApiUrl(state.apiUrl);
+  if (!runnerApiUrl || runnerApiUrl !== currentApiUrl) {
+    logger.debug(`[RUNNER CONTROL] Runner API URL mismatch. Current: ${currentApiUrl ?? 'null'}, runner: ${runnerApiUrl ?? 'null'}`);
     return false;
   }
   

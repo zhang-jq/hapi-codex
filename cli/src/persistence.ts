@@ -37,6 +37,7 @@ const defaultSettings: Settings = {}
 export interface RunnerLocallyPersistedState {
   pid: number;
   httpPort: number;
+  apiUrl?: string;
   startTime: string;
   startedWithCliVersion: string;
   startedWithCliMtimeMs?: number;

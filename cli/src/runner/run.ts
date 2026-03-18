@@ -20,6 +20,7 @@ import { startRunnerControlServer } from './controlServer';
 import { createWorktree, removeWorktree, type WorktreeInfo } from './worktree';
 import { join } from 'path';
 import { buildMachineMetadata } from '@/agent/sessionFactory';
+import { configuration } from '@/configuration';
 
 export async function startRunner(): Promise<void> {
   // We don't have cleanup function at the time of server construction
@@ -631,6 +632,7 @@ export async function startRunner(): Promise<void> {
     const fileState: RunnerLocallyPersistedState = {
       pid: process.pid,
       httpPort: controlPort,
+      apiUrl: configuration.apiUrl,
       startTime: new Date().toLocaleString(),
       startedWithCliVersion: packageJson.version,
       startedWithCliMtimeMs,
@@ -790,6 +792,7 @@ export async function startRunner(): Promise<void> {
         const updatedState: RunnerLocallyPersistedState = {
           pid: process.pid,
           httpPort: controlPort,
+          apiUrl: configuration.apiUrl,
           startTime: fileState.startTime,
           startedWithCliVersion: packageJson.version,
           startedWithCliMtimeMs,

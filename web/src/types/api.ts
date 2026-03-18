@@ -164,6 +164,14 @@ export type AdminOverview = {
         dbPath: string
         settingsFile: string
         corsOrigins: string[]
+        sources: {
+            listenHost: 'env' | 'file' | 'default'
+            listenPort: 'env' | 'file' | 'default'
+            publicUrl: 'env' | 'file' | 'default'
+            corsOrigins: 'env' | 'file' | 'default'
+        }
+        publicUrlEditable: boolean
+        publicUrlEditableReason?: string
     }
     token: AdminToken
     access: {
@@ -190,6 +198,15 @@ export type UpdateAccessPolicyPayload = {
 
 export type UpdateAccessPolicyResponse = {
     accessPolicy: AdminAccessPolicy
+}
+
+export type UpdatePublicUrlPayload = {
+    publicUrl?: string | null
+}
+
+export type UpdatePublicUrlResponse = {
+    publicUrl: string
+    source: 'file' | 'default'
 }
 
 export type SpawnResponse =

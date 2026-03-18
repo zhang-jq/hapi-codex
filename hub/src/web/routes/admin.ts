@@ -3,6 +3,7 @@ import type { WebAppEnv } from '../middleware/auth'
 import { configuration } from '../../configuration'
 import { readAccessPolicy, updateAccessPolicy } from '../../config/accessPolicy'
 import { rotateCliApiToken } from '../../config/cliApiToken'
+import { updatePublicUrl } from '../../config/publicUrlConfig'
 import { getAccessUrls } from '../../utils/accessUrls'
 import { getTailscaleStatus } from '../../utils/tailscale'
 
@@ -87,6 +88,16 @@ export function createAdminRoutes(): Hono<WebAppEnv> {
                     dbPath: configuration.dbPath,
                     settingsFile: configuration.settingsFile,
                     corsOrigins: configuration.corsOrigins,
+                    sources: {
+                        listenHost: configuration.sources.listenHost,
+                        listenPort: configuration.sources.listenPort,
+                        publicUrl: configuration.sources.publicUrl,
+                        corsOrigins: configuration.sources.corsOrigins,
+                    },
+                    publicUrlEditable: configuration.sources.publicUrl !== 'env',
+                    publicUrlEditableReason: configuration.sources.publicUrl === 'env'
+                        ? 'HAPI_PUBLIC_URL is set via environment variable; update the startup config to change it.'
+                        : undefined,
                 },
                 token: getTokenState(),
                 access: {
@@ -119,6 +130,34 @@ export function createAdminRoutes(): Hono<WebAppEnv> {
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to update access policy'
             return c.json({ error: message }, 500)
+        }
+    })
+
+    app.post('/admin/public-url', async (c) => {
+        const body = await c.req.json().catch(() => null)
+        if (!body || typeof body !== 'object') {
+            return c.json({ error: 'Invalid body' }, 400)
+        }
+
+        if (configuration.sources.publicUrl === 'env') {
+            return c.json({
+                error: 'HAPI_PUBLIC_URL is set via environment variable; update the startup config to change it.'
+            }, 409)
+        }
+
+        try {
+            const result = await updatePublicUrl(
+                configuration.settingsFile,
+                Reflect.get(body, 'publicUrl')
+            )
+            configuration._setPublicUrl(result.publicUrl, result.source)
+            return c.json({
+                publicUrl: result.publicUrl,
+                source: result.source,
+            })
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to update public URL'
+            return c.json({ error: message }, 400)
         }
     })
 

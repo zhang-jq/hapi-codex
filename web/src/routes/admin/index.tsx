@@ -334,6 +334,7 @@ export default function AdminPage() {
     const [selectedMode, setSelectedMode] = useState<AdminAccessMode>('local')
     const [draftEnabledModes, setDraftEnabledModes] = useState<AdminAccessMode[]>(ACCESS_MODES)
     const [draftPreferredMode, setDraftPreferredMode] = useState<AdminAccessMode>('tailscale')
+    const [draftPublicUrl, setDraftPublicUrl] = useState('')
     const getModeLabel = (mode: AdminAccessMode) => t(ACCESS_MODE_LABEL_KEYS[mode])
 
     const rotateTokenMutation = useMutation({
@@ -391,6 +392,34 @@ export default function AdminPage() {
         },
     })
 
+    const updatePublicUrlMutation = useMutation({
+        mutationFn: async () => {
+            if (!api) {
+                throw new Error('API unavailable')
+            }
+            return await api.updatePublicUrl({
+                publicUrl: draftPublicUrl.trim() || null,
+            })
+        },
+        onSuccess: async (result) => {
+            await queryClient.invalidateQueries({ queryKey: queryKeys.adminOverview })
+            addToast({
+                title: t('admin.publicUrl.savedTitle'),
+                body: t('admin.publicUrl.savedBody', { publicUrl: result.publicUrl }),
+                sessionId: '',
+                url: ''
+            })
+        },
+        onError: (mutationError) => {
+            addToast({
+                title: t('admin.publicUrl.failedTitle'),
+                body: mutationError instanceof Error ? mutationError.message : 'Unknown error',
+                sessionId: '',
+                url: ''
+            })
+        },
+    })
+
     const recentSessions = useMemo(() => sessions.slice(0, 8), [sessions])
     const activeSessions = sessions.filter((session) => session.active).length
     const importedSessions = sessions.filter((session) => session.metadata?.sessionOrigin === 'imported').length
@@ -403,6 +432,7 @@ export default function AdminPage() {
         }
         setDraftEnabledModes(overview.access.policy.enabledModes)
         setDraftPreferredMode(overview.access.policy.preferredMode)
+        setDraftPublicUrl(overview.config.publicUrl)
     }, [overview])
 
     const enabledGuideModes = overview?.access.policy.enabledModes ?? ACCESS_MODES
@@ -439,6 +469,13 @@ export default function AdminPage() {
 
         return draftEnabledModes.some((mode, index) => mode !== overview.access.policy.enabledModes[index])
     }, [draftEnabledModes, draftPreferredMode, overview])
+
+    const publicUrlIsDirty = useMemo(() => {
+        if (!overview) {
+            return false
+        }
+        return draftPublicUrl.trim() !== overview.config.publicUrl
+    }, [draftPublicUrl, overview])
 
     const tokenValue = overview?.token.value ?? ''
 
@@ -782,6 +819,45 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                         description={t('admin.access.description')}
                     >
                         <div className="space-y-3">
+                            <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3">
+                                <div className="text-sm font-medium text-[var(--app-fg)]">{t('admin.publicUrl.title')}</div>
+                                <div className="mt-1 text-xs text-[var(--app-hint)]">
+                                    {t('admin.publicUrl.description')}
+                                </div>
+                                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                                    <input
+                                        type="text"
+                                        value={draftPublicUrl}
+                                        onChange={(event) => setDraftPublicUrl(event.target.value)}
+                                        disabled={!overview?.config.publicUrlEditable}
+                                        placeholder="https://hapi.example.com"
+                                        className="min-w-0 flex-1 rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] px-3 py-2 text-sm text-[var(--app-fg)] disabled:cursor-not-allowed disabled:opacity-60"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => void updatePublicUrlMutation.mutateAsync()}
+                                        disabled={!overview?.config.publicUrlEditable || !publicUrlIsDirty || updatePublicUrlMutation.isPending}
+                                        className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm text-[var(--app-fg)] transition-colors hover:bg-[var(--app-subtle-bg)] disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {updatePublicUrlMutation.isPending ? t('admin.publicUrl.saving') : t('admin.publicUrl.save')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setDraftPublicUrl('')}
+                                        disabled={!overview?.config.publicUrlEditable || updatePublicUrlMutation.isPending}
+                                        className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm text-[var(--app-fg)] transition-colors hover:bg-[var(--app-subtle-bg)] disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {t('admin.publicUrl.reset')}
+                                    </button>
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--app-hint)]">
+                                    <span>{t('admin.publicUrl.source')}: {overview?.config.sources.publicUrl ?? t('admin.token.unknown')}</span>
+                                    <span>{t('admin.publicUrl.restartNote')}</span>
+                                </div>
+                                {!overview?.config.publicUrlEditable && overview?.config.publicUrlEditableReason ? (
+                                    <div className="mt-2 text-xs text-amber-600">{overview.config.publicUrlEditableReason}</div>
+                                ) : null}
+                            </div>
                             <UrlRow label={t('admin.access.currentHub')} value={baseUrl} onCopy={copyText} />
                             {overview?.access.publicUrl ? (
                                 <UrlRow label={t('admin.access.publicUrl')} value={overview.access.publicUrl} onCopy={copyText} />

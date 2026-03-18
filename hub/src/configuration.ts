@@ -165,6 +165,11 @@ class Configuration {
         this.cliApiTokenIsNew = isNew
         ;(this.sources as { cliApiToken: string }).cliApiToken = source
     }
+
+    _setPublicUrl(publicUrl: string, source: 'env' | 'file' | 'default'): void {
+        ;(this as { publicUrl: string }).publicUrl = publicUrl
+        ;(this.sources as { publicUrl: ConfigSource }).publicUrl = source
+    }
 }
 
 // Singleton instance (set by createConfiguration)

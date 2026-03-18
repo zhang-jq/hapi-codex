@@ -1,6 +1,8 @@
 import type {
     UpdateAccessPolicyPayload,
     UpdateAccessPolicyResponse,
+    UpdatePublicUrlPayload,
+    UpdatePublicUrlResponse,
     AdminOverviewResponse,
     AttachmentMetadata,
     AuthResponse,
@@ -183,6 +185,13 @@ export class ApiClient {
 
     async updateAccessPolicy(payload: UpdateAccessPolicyPayload): Promise<UpdateAccessPolicyResponse> {
         return await this.request<UpdateAccessPolicyResponse>('/api/admin/access-policy', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        })
+    }
+
+    async updatePublicUrl(payload: UpdatePublicUrlPayload): Promise<UpdatePublicUrlResponse> {
+        return await this.request<UpdatePublicUrlResponse>('/api/admin/public-url', {
             method: 'POST',
             body: JSON.stringify(payload)
         })

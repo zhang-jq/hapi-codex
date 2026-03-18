@@ -1,4 +1,6 @@
 import type {
+    UpdateAccessPolicyPayload,
+    UpdateAccessPolicyResponse,
     AdminOverviewResponse,
     AttachmentMetadata,
     AuthResponse,
@@ -176,6 +178,13 @@ export class ApiClient {
         return await this.request<RotateCliApiTokenResponse>('/api/admin/token/rotate', {
             method: 'POST',
             body: JSON.stringify({})
+        })
+    }
+
+    async updateAccessPolicy(payload: UpdateAccessPolicyPayload): Promise<UpdateAccessPolicyResponse> {
+        return await this.request<UpdateAccessPolicyResponse>('/api/admin/access-policy', {
+            method: 'POST',
+            body: JSON.stringify(payload)
         })
     }
 

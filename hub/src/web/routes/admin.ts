@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { WebAppEnv } from '../middleware/auth'
 import { configuration } from '../../configuration'
+import { readAccessPolicy, updateAccessPolicy } from '../../config/accessPolicy'
 import { rotateCliApiToken } from '../../config/cliApiToken'
 import { getAccessUrls } from '../../utils/accessUrls'
 import { getTailscaleStatus } from '../../utils/tailscale'
@@ -69,6 +70,7 @@ export function createAdminRoutes(): Hono<WebAppEnv> {
         const localUrls = getAccessUrls(configuration.listenHost, configuration.listenPort)
         const tailscaleUrls = tailscale.ips.map((ip) => `http://${ip}:${configuration.listenPort}`)
         const publicUrl = configuration.publicUrl || null
+        const accessPolicy = await readAccessPolicy(configuration.settingsFile)
         const [publicHealth, tailscaleHealth] = await Promise.all([
             publicUrl ? probeHealth(publicUrl) : Promise.resolve(null),
             tailscaleUrls.length > 0 ? probeHealth(tailscaleUrls[0]) : Promise.resolve(null)
@@ -88,6 +90,7 @@ export function createAdminRoutes(): Hono<WebAppEnv> {
                 },
                 token: getTokenState(),
                 access: {
+                    policy: accessPolicy,
                     localUrls,
                     publicUrl,
                     publicHealth,
@@ -99,6 +102,24 @@ export function createAdminRoutes(): Hono<WebAppEnv> {
                 }
             }
         })
+    })
+
+    app.post('/admin/access-policy', async (c) => {
+        const body = await c.req.json().catch(() => null)
+        if (!body || typeof body !== 'object') {
+            return c.json({ error: 'Invalid body' }, 400)
+        }
+
+        try {
+            const accessPolicy = await updateAccessPolicy(configuration.settingsFile, {
+                enabledModes: Reflect.get(body, 'enabledModes'),
+                preferredMode: Reflect.get(body, 'preferredMode'),
+            })
+            return c.json({ accessPolicy })
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to update access policy'
+            return c.json({ error: message }, 500)
+        }
     })
 
     app.post('/admin/token/rotate', async (c) => {

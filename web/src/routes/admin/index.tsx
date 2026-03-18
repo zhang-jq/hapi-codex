@@ -10,6 +10,7 @@ import { useToast } from '@/lib/toast-context'
 import { queryKeys } from '@/lib/query-keys'
 import { LoadingState } from '@/components/LoadingState'
 import { storeAccessTokenForBaseUrl } from '@/lib/accessTokenStorage'
+import type { AdminAccessMode } from '@/types/api'
 
 function BackIcon(props: { className?: string }) {
     return (
@@ -168,6 +169,55 @@ function ModeButton(props: {
     )
 }
 
+function PolicyToggleCard(props: {
+    mode: AdminAccessMode
+    enabled: boolean
+    preferred: boolean
+    canDisable: boolean
+    onToggle: () => void
+    onSetPreferred: () => void
+}) {
+    return (
+        <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-[var(--app-fg)]">{ACCESS_MODE_LABELS[props.mode]}</div>
+                    <div className="mt-1 text-xs text-[var(--app-hint)]">{ACCESS_MODE_HINTS[props.mode]}</div>
+                </div>
+                <button
+                    type="button"
+                    onClick={props.onToggle}
+                    disabled={props.enabled && !props.canDisable}
+                    className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                        props.enabled
+                            ? 'bg-[var(--app-link)] text-white'
+                            : 'border border-[var(--app-border)] text-[var(--app-fg)] hover:bg-[var(--app-subtle-bg)]'
+                    } ${props.enabled && !props.canDisable ? 'opacity-70' : ''}`}
+                >
+                    {props.enabled ? 'Enabled' : 'Disabled'}
+                </button>
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-3">
+                <div className="text-xs text-[var(--app-hint)]">
+                    {props.enabled
+                        ? (props.preferred
+                            ? 'This is the default mode shown to users first.'
+                            : 'Enabled, but not the default recommendation.')
+                        : 'Disabled modes stay visible for admin diagnostics, but disappear from the teammate guide.'}
+                </div>
+                <button
+                    type="button"
+                    onClick={props.onSetPreferred}
+                    disabled={!props.enabled || props.preferred}
+                    className="rounded-full border border-[var(--app-border)] px-3 py-1.5 text-xs text-[var(--app-fg)] transition-colors hover:bg-[var(--app-subtle-bg)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                    {props.preferred ? 'Default' : 'Set default'}
+                </button>
+            </div>
+        </div>
+    )
+}
+
 function SnippetBlock(props: {
     title: string
     code: string
@@ -191,8 +241,20 @@ function SnippetBlock(props: {
     )
 }
 
-type AccessMode = 'local' | 'tailscale' | 'public'
 type TroubleshootingLevel = 'good' | 'warning' | 'critical'
+const ACCESS_MODES: AdminAccessMode[] = ['local', 'tailscale', 'public']
+
+const ACCESS_MODE_LABELS: Record<AdminAccessMode, string> = {
+    local: 'Local / LAN',
+    tailscale: 'Tailscale',
+    public: 'Public / VPS',
+}
+
+const ACCESS_MODE_HINTS: Record<AdminAccessMode, string> = {
+    local: 'Same machine or same LAN only.',
+    tailscale: 'Recommended private remote access for teammates in the same tailnet.',
+    public: 'Use your own server or public reverse proxy as a fallback.',
+}
 
 function getHostFromUrl(url: string): string {
     try {
@@ -243,7 +305,9 @@ export default function AdminPage() {
         error: sessionsError,
     } = useSessions(api)
     const [showToken, setShowToken] = useState(false)
-    const [selectedMode, setSelectedMode] = useState<AccessMode>('local')
+    const [selectedMode, setSelectedMode] = useState<AdminAccessMode>('local')
+    const [draftEnabledModes, setDraftEnabledModes] = useState<AdminAccessMode[]>(ACCESS_MODES)
+    const [draftPreferredMode, setDraftPreferredMode] = useState<AdminAccessMode>('tailscale')
 
     const rotateTokenMutation = useMutation({
         mutationFn: async () => {
@@ -268,33 +332,83 @@ export default function AdminPage() {
         }
     })
 
+    const updateAccessPolicyMutation = useMutation({
+        mutationFn: async () => {
+            if (!api) {
+                throw new Error('API unavailable')
+            }
+            return await api.updateAccessPolicy({
+                enabledModes: draftEnabledModes,
+                preferredMode: draftPreferredMode,
+            })
+        },
+        onSuccess: async (result) => {
+            await queryClient.invalidateQueries({ queryKey: queryKeys.adminOverview })
+            addToast({
+                title: 'Access policy saved',
+                body: `Enabled: ${result.accessPolicy.enabledModes.map((mode) => ACCESS_MODE_LABELS[mode]).join(', ')} · Default: ${ACCESS_MODE_LABELS[result.accessPolicy.preferredMode]}`,
+                sessionId: '',
+                url: ''
+            })
+        },
+        onError: (mutationError) => {
+            addToast({
+                title: 'Failed to save access policy',
+                body: mutationError instanceof Error ? mutationError.message : 'Unknown error',
+                sessionId: '',
+                url: ''
+            })
+        },
+    })
+
     const recentSessions = useMemo(() => sessions.slice(0, 8), [sessions])
     const activeSessions = sessions.filter((session) => session.active).length
     const importedSessions = sessions.filter((session) => session.metadata?.sessionOrigin === 'imported').length
     const onlineMachines = machines.filter((machine) => machine.active).length
     const runnerMachines = machines.filter((machine) => Boolean(machine.runnerState?.pid)).length
 
-    const preferredMode = useMemo<AccessMode>(() => {
-        if (overview?.access.tailscale.running && overview.access.tailscale.urls.length > 0) {
-            return 'tailscale'
+    useEffect(() => {
+        if (!overview) {
+            return
         }
-        if (overview?.access.publicUrl) {
-            return 'public'
-        }
-        return 'local'
+        setDraftEnabledModes(overview.access.policy.enabledModes)
+        setDraftPreferredMode(overview.access.policy.preferredMode)
     }, [overview])
+
+    const enabledGuideModes = overview?.access.policy.enabledModes ?? ACCESS_MODES
+    const configuredPreferredMode = overview?.access.policy.preferredMode ?? 'tailscale'
+
+    const defaultGuideMode = useMemo<AdminAccessMode>(() => {
+        if (enabledGuideModes.includes(configuredPreferredMode)) {
+            return configuredPreferredMode
+        }
+        return enabledGuideModes[0] ?? 'local'
+    }, [configuredPreferredMode, enabledGuideModes])
 
     useEffect(() => {
         setSelectedMode((currentMode) => {
-            if (currentMode === 'public' && !overview?.access.publicUrl) {
-                return preferredMode
+            if (!enabledGuideModes.includes(currentMode)) {
+                return defaultGuideMode
             }
-            if (currentMode === 'tailscale' && !overview?.access.tailscale.urls.length) {
-                return preferredMode
-            }
-            return currentMode || preferredMode
+            return currentMode || defaultGuideMode
         })
-    }, [overview, preferredMode])
+    }, [defaultGuideMode, enabledGuideModes])
+
+    const draftPolicyIsDirty = useMemo(() => {
+        if (!overview) {
+            return false
+        }
+
+        if (draftPreferredMode !== overview.access.policy.preferredMode) {
+            return true
+        }
+
+        if (draftEnabledModes.length !== overview.access.policy.enabledModes.length) {
+            return true
+        }
+
+        return draftEnabledModes.some((mode, index) => mode !== overview.access.policy.enabledModes[index])
+    }, [draftEnabledModes, draftPreferredMode, overview])
 
     const copyText = async (value: string, label: string) => {
         try {
@@ -318,6 +432,35 @@ export default function AdminPage() {
     const buildLoginLink = (entryUrl: string): string => {
         const normalized = entryUrl.replace(/\/+$/, '')
         return `${normalized}/?token=${encodeURIComponent(overview?.token.value ?? '')}`
+    }
+
+    const toggleDraftMode = (mode: AdminAccessMode) => {
+        if (draftEnabledModes.includes(mode)) {
+            if (draftEnabledModes.length === 1) {
+                addToast({
+                    title: 'Keep one access mode enabled',
+                    body: 'At least one access path must stay available for users.',
+                    sessionId: '',
+                    url: ''
+                })
+                return
+            }
+
+            const nextModes = ACCESS_MODES.filter(
+                (candidate) => candidate !== mode && draftEnabledModes.includes(candidate)
+            )
+            setDraftEnabledModes(nextModes)
+            if (!nextModes.includes(draftPreferredMode)) {
+                setDraftPreferredMode(nextModes[0]!)
+            }
+            return
+        }
+
+        setDraftEnabledModes(
+            ACCESS_MODES.filter(
+                (candidate) => candidate === mode || draftEnabledModes.includes(candidate)
+            )
+        )
     }
 
     const publicHost = useMemo(() => {
@@ -470,6 +613,8 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
 
     const troubleshootingItems = useMemo(() => {
         const items: Array<{ level: TroubleshootingLevel; title: string; body: string }> = []
+        const publicModeEnabled = overview?.access.policy.enabledModes.includes('public') ?? true
+        const tailscaleModeEnabled = overview?.access.policy.enabledModes.includes('tailscale') ?? true
 
         if (onlineMachines === 0) {
             items.push({
@@ -479,7 +624,7 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
             })
         }
 
-        if (overview?.access.tailscale.installed && !overview.access.tailscale.running) {
+        if (tailscaleModeEnabled && overview?.access.tailscale.installed && !overview.access.tailscale.running) {
             items.push({
                 level: 'warning',
                 title: 'Tailscale is installed but not connected',
@@ -487,7 +632,7 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
             })
         }
 
-        if (!overview?.access.tailscale.installed) {
+        if (tailscaleModeEnabled && !overview?.access.tailscale.installed) {
             items.push({
                 level: 'warning',
                 title: 'Tailscale is not installed',
@@ -495,7 +640,7 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
             })
         }
 
-        if (overview?.access.publicUrl && overview.access.publicHealth && !overview.access.publicHealth.ok) {
+        if (publicModeEnabled && overview?.access.publicUrl && overview.access.publicHealth && !overview.access.publicHealth.ok) {
             const httpHint = overview.access.publicHealth.status === 502
                 ? 'This usually means the reverse proxy is reachable but its upstream tunnel is down or misconfigured.'
                 : 'The public URL is not healthy right now.'
@@ -506,7 +651,7 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
             })
         }
 
-        if (overview?.access.publicUrl && !publicUsesDomain) {
+        if (publicModeEnabled && overview?.access.publicUrl && !publicUsesDomain) {
             items.push({
                 level: 'warning',
                 title: 'Public URL is using an IP address',
@@ -578,7 +723,7 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
 
                     <AdminCard
                         title="Access"
-                        description="Primary remote path should be Tailscale. Public URL stays available as a fallback."
+                        description="Detected entrypoints, runtime health, and URLs you can still use for diagnostics."
                     >
                         <div className="space-y-3">
                             <UrlRow label="Current hub" value={baseUrl} onCopy={copyText} />
@@ -630,33 +775,61 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                     </AdminCard>
 
                     <AdminCard
+                        title="Access Policy"
+                        description="Choose which schemes users should see in the connection guide, and which one is recommended by default."
+                        actions={(
+                            <button
+                                type="button"
+                                onClick={() => void updateAccessPolicyMutation.mutateAsync()}
+                                disabled={!draftPolicyIsDirty || updateAccessPolicyMutation.isPending}
+                                className="rounded-full border border-[var(--app-border)] px-3 py-1.5 text-sm text-[var(--app-fg)] transition-colors hover:bg-[var(--app-subtle-bg)] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {updateAccessPolicyMutation.isPending ? 'Saving…' : 'Save'}
+                            </button>
+                        )}
+                    >
+                        <div className="space-y-3">
+                            {ACCESS_MODES.map((mode) => (
+                                <PolicyToggleCard
+                                    key={mode}
+                                    mode={mode}
+                                    enabled={draftEnabledModes.includes(mode)}
+                                    preferred={draftPreferredMode === mode}
+                                    canDisable={draftEnabledModes.length > 1}
+                                    onToggle={() => toggleDraftMode(mode)}
+                                    onSetPreferred={() => setDraftPreferredMode(mode)}
+                                />
+                            ))}
+                            <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3 text-xs text-[var(--app-hint)]">
+                                Enabled modes: {draftEnabledModes.map((mode) => ACCESS_MODE_LABELS[mode]).join(', ')}.
+                                {' '}Default recommendation: {ACCESS_MODE_LABELS[draftPreferredMode]}.
+                            </div>
+                        </div>
+                    </AdminCard>
+
+                    <AdminCard
                         title="Connection Guide"
                         description="Use this to onboard another teammate. Pick the access mode first, then copy the generated login link or server template."
                     >
                         <div className="space-y-4">
                             <div className="flex flex-wrap gap-2">
-                                <ModeButton
-                                    label="Local / LAN"
-                                    active={selectedMode === 'local'}
-                                    onClick={() => setSelectedMode('local')}
-                                />
-                                <ModeButton
-                                    label="Tailscale"
-                                    active={selectedMode === 'tailscale'}
-                                    onClick={() => setSelectedMode('tailscale')}
-                                />
-                                <ModeButton
-                                    label="Public / VPS"
-                                    active={selectedMode === 'public'}
-                                    onClick={() => setSelectedMode('public')}
-                                />
+                                {enabledGuideModes.map((mode) => (
+                                    <ModeButton
+                                        key={mode}
+                                        label={ACCESS_MODE_LABELS[mode]}
+                                        active={selectedMode === mode}
+                                        onClick={() => setSelectedMode(mode)}
+                                    />
+                                ))}
                             </div>
 
                             {accessModeContent ? (
                                 <div className="space-y-3">
                                     <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3">
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <div className="text-sm font-medium text-[var(--app-fg)]">Current recommendation</div>
+                                            <div className="text-sm font-medium text-[var(--app-fg)]">
+                                                {selectedMode === configuredPreferredMode ? 'Current default recommendation' : 'Current mode'}
+                                            </div>
                                             {accessModeContent.health ? (
                                                 <StatusBadge
                                                     ok={accessModeContent.health.ok}

@@ -129,6 +129,13 @@ export type AdminToken = {
     reason?: string
 }
 
+export type AdminAccessMode = 'local' | 'tailscale' | 'public'
+
+export type AdminAccessPolicy = {
+    enabledModes: AdminAccessMode[]
+    preferredMode: AdminAccessMode
+}
+
 export type AccessHealth = {
     ok: boolean
     status?: number
@@ -160,6 +167,7 @@ export type AdminOverview = {
     }
     token: AdminToken
     access: {
+        policy: AdminAccessPolicy
         localUrls: string[]
         publicUrl: string | null
         publicHealth: AccessHealth | null
@@ -173,6 +181,15 @@ export type AdminOverviewResponse = {
 
 export type RotateCliApiTokenResponse = {
     token: AdminToken
+}
+
+export type UpdateAccessPolicyPayload = {
+    enabledModes: AdminAccessMode[]
+    preferredMode: AdminAccessMode
+}
+
+export type UpdateAccessPolicyResponse = {
+    accessPolicy: AdminAccessPolicy
 }
 
 export type SpawnResponse =

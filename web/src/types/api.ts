@@ -129,6 +129,13 @@ export type AdminToken = {
     reason?: string
 }
 
+export type AccessHealth = {
+    ok: boolean
+    status?: number
+    message: string
+    checkedAt: number
+}
+
 export type AdminTailscaleStatus = {
     installed: boolean
     running: boolean
@@ -136,6 +143,7 @@ export type AdminTailscaleStatus = {
     hostname?: string
     ips: string[]
     urls: string[]
+    health: AccessHealth | null
     error?: string
 }
 
@@ -154,6 +162,7 @@ export type AdminOverview = {
     access: {
         localUrls: string[]
         publicUrl: string | null
+        publicHealth: AccessHealth | null
         tailscale: AdminTailscaleStatus
     }
 }

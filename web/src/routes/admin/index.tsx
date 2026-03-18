@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useAppContext } from '@/lib/app-context'
@@ -131,6 +131,68 @@ function UrlRow(props: {
     )
 }
 
+function StatusBadge(props: {
+    ok: boolean
+    label: string
+}) {
+    return (
+        <span
+            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                props.ok
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-amber-100 text-amber-700'
+            }`}
+        >
+            {props.label}
+        </span>
+    )
+}
+
+function ModeButton(props: {
+    label: string
+    active: boolean
+    onClick: () => void
+}) {
+    return (
+        <button
+            type="button"
+            onClick={props.onClick}
+            className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                props.active
+                    ? 'bg-[var(--app-link)] text-white'
+                    : 'border border-[var(--app-border)] text-[var(--app-fg)] hover:bg-[var(--app-subtle-bg)]'
+            }`}
+        >
+            {props.label}
+        </button>
+    )
+}
+
+function SnippetBlock(props: {
+    title: string
+    code: string
+    onCopy: (value: string, label: string) => void
+}) {
+    return (
+        <div className="rounded-xl border border-[var(--app-divider)]">
+            <div className="flex items-center justify-between border-b border-[var(--app-divider)] px-3 py-2">
+                <div className="text-xs font-medium text-[var(--app-hint)]">{props.title}</div>
+                <button
+                    type="button"
+                    onClick={() => props.onCopy(props.code, props.title)}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--app-hint)] transition-colors hover:bg-[var(--app-subtle-bg)] hover:text-[var(--app-fg)]"
+                    title={`Copy ${props.title}`}
+                >
+                    <CopyIcon />
+                </button>
+            </div>
+            <pre className="overflow-x-auto whitespace-pre-wrap break-words px-3 py-3 text-xs text-[var(--app-fg)]">{props.code}</pre>
+        </div>
+    )
+}
+
+type AccessMode = 'local' | 'tailscale' | 'public'
+
 export default function AdminPage() {
     const { api, baseUrl, authSourceType, setBrowserAccessToken } = useAppContext()
     const goBack = useAppGoBack()
@@ -149,6 +211,7 @@ export default function AdminPage() {
         error: sessionsError,
     } = useSessions(api)
     const [showToken, setShowToken] = useState(false)
+    const [selectedMode, setSelectedMode] = useState<AccessMode>('local')
 
     const rotateTokenMutation = useMutation({
         mutationFn: async () => {
@@ -179,6 +242,28 @@ export default function AdminPage() {
     const onlineMachines = machines.filter((machine) => machine.active).length
     const runnerMachines = machines.filter((machine) => Boolean(machine.runnerState?.pid)).length
 
+    const preferredMode = useMemo<AccessMode>(() => {
+        if (overview?.access.tailscale.running && overview.access.tailscale.urls.length > 0) {
+            return 'tailscale'
+        }
+        if (overview?.access.publicUrl) {
+            return 'public'
+        }
+        return 'local'
+    }, [overview])
+
+    useEffect(() => {
+        setSelectedMode((currentMode) => {
+            if (currentMode === 'public' && !overview?.access.publicUrl) {
+                return preferredMode
+            }
+            if (currentMode === 'tailscale' && !overview?.access.tailscale.urls.length) {
+                return preferredMode
+            }
+            return currentMode || preferredMode
+        })
+    }, [overview, preferredMode])
+
     const copyText = async (value: string, label: string) => {
         try {
             await navigator.clipboard.writeText(value)
@@ -197,6 +282,113 @@ export default function AdminPage() {
             })
         }
     }
+
+    const buildLoginLink = (entryUrl: string): string => {
+        const normalized = entryUrl.replace(/\/+$/, '')
+        return `${normalized}/?token=${encodeURIComponent(overview?.token.value ?? '')}`
+    }
+
+    const publicHost = useMemo(() => {
+        if (!overview?.access.publicUrl) {
+            return 'your-hapi.example.com'
+        }
+        try {
+            return new URL(overview.access.publicUrl).host
+        } catch {
+            return overview.access.publicUrl.replace(/^https?:\/\//, '')
+        }
+    }, [overview?.access.publicUrl])
+
+    const vpsTunnelSnippet = useMemo(() => {
+        return `ssh -NT -R 127.0.0.1:13006:127.0.0.1:${overview?.config.listenPort ?? 3006} user@${publicHost}`
+    }, [overview?.config.listenPort, publicHost])
+
+    const vpsNginxSnippet = useMemo(() => {
+        return `server {
+    listen 80;
+    server_name ${publicHost};
+
+    client_max_body_size 20m;
+
+    location / {
+        proxy_pass http://127.0.0.1:13006;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+    }
+}`
+    }, [publicHost])
+
+    const localLoginLink = overview?.access.localUrls[0]
+        ? buildLoginLink(overview.access.localUrls[0])
+        : ''
+    const tailscaleLoginLink = overview?.access.tailscale.urls[0]
+        ? buildLoginLink(overview.access.tailscale.urls[0])
+        : ''
+    const publicLoginLink = overview?.access.publicUrl
+        ? buildLoginLink(overview.access.publicUrl)
+        : ''
+
+    const accessModeContent = useMemo(() => {
+        if (!overview) {
+            return null
+        }
+
+        if (selectedMode === 'tailscale') {
+            return {
+                summary: 'Recommended for teammates inside the same tailnet. No VPS is required and the route is usually the most stable.',
+                health: overview.access.tailscale.health,
+                link: tailscaleLoginLink,
+                steps: [
+                    'Install Tailscale on the Mac running hapi-codex and on the teammate device.',
+                    'Sign both devices into the same tailnet.',
+                    'Open the generated login link below or add it to the teammate browser/PWA.',
+                    'If access fails, check the Tailscale status card above first.',
+                ],
+                snippets: [] as { title: string; code: string }[],
+            }
+        }
+
+        if (selectedMode === 'public') {
+            return {
+                summary: 'Use this when teammates are outside your tailnet. This page does not SSH into the server for you; it generates the template your teammate can follow.',
+                health: overview.access.publicHealth,
+                link: publicLoginLink,
+                steps: [
+                    'Keep the hub listening locally on this Mac.',
+                    'Expose the hub to the VPS with a reverse tunnel or another private upstream.',
+                    'Put nginx (or another proxy) in front of that upstream and point the public URL at it.',
+                    'Verify the public URL health result turns green before sharing the login link.',
+                ],
+                snippets: [
+                    { title: 'Reverse SSH Tunnel', code: vpsTunnelSnippet },
+                    { title: 'nginx Template', code: vpsNginxSnippet },
+                ],
+            }
+        }
+
+        return {
+            summary: 'Best for the same LAN or direct testing on this machine.',
+            health: null,
+            link: localLoginLink,
+            steps: [
+                'Keep the hub and runner running on this Mac.',
+                'Share the LAN URL with the teammate if they are on the same network.',
+                'Use the generated login link so they do not need to type the token manually.',
+            ],
+            snippets: [] as { title: string; code: string }[],
+        }
+    }, [
+        localLoginLink,
+        overview,
+        publicLoginLink,
+        selectedMode,
+        tailscaleLoginLink,
+        vpsNginxSnippet,
+        vpsTunnelSnippet,
+    ])
 
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--app-bg)]">
@@ -273,6 +465,102 @@ export default function AdminPage() {
                                 <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3 text-sm text-[var(--app-hint)]">
                                     Tailscale is installed but not connected{overview.access.tailscale.backendState ? ` (${overview.access.tailscale.backendState})` : ''}.
                                     {overview.access.tailscale.error ? ` ${overview.access.tailscale.error}` : ''}
+                                </div>
+                            ) : null}
+                            {overview?.access.publicUrl && overview.access.publicHealth ? (
+                                <div className="flex items-center justify-between rounded-xl border border-[var(--app-divider)] px-3 py-3">
+                                    <div>
+                                        <div className="text-sm text-[var(--app-fg)]">Public URL health</div>
+                                        <div className="mt-1 text-xs text-[var(--app-hint)]">{overview.access.publicHealth.message}</div>
+                                    </div>
+                                    <StatusBadge
+                                        ok={overview.access.publicHealth.ok}
+                                        label={overview.access.publicHealth.ok ? 'Healthy' : 'Needs attention'}
+                                    />
+                                </div>
+                            ) : null}
+                            {overview?.access.tailscale.health ? (
+                                <div className="flex items-center justify-between rounded-xl border border-[var(--app-divider)] px-3 py-3">
+                                    <div>
+                                        <div className="text-sm text-[var(--app-fg)]">Tailscale health</div>
+                                        <div className="mt-1 text-xs text-[var(--app-hint)]">{overview.access.tailscale.health.message}</div>
+                                    </div>
+                                    <StatusBadge
+                                        ok={overview.access.tailscale.health.ok}
+                                        label={overview.access.tailscale.health.ok ? 'Healthy' : 'Needs attention'}
+                                    />
+                                </div>
+                            ) : null}
+                        </div>
+                    </AdminCard>
+
+                    <AdminCard
+                        title="Connection Guide"
+                        description="Use this to onboard another teammate. Pick the access mode first, then copy the generated login link or server template."
+                    >
+                        <div className="space-y-4">
+                            <div className="flex flex-wrap gap-2">
+                                <ModeButton
+                                    label="Local / LAN"
+                                    active={selectedMode === 'local'}
+                                    onClick={() => setSelectedMode('local')}
+                                />
+                                <ModeButton
+                                    label="Tailscale"
+                                    active={selectedMode === 'tailscale'}
+                                    onClick={() => setSelectedMode('tailscale')}
+                                />
+                                <ModeButton
+                                    label="Public / VPS"
+                                    active={selectedMode === 'public'}
+                                    onClick={() => setSelectedMode('public')}
+                                />
+                            </div>
+
+                            {accessModeContent ? (
+                                <div className="space-y-3">
+                                    <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <div className="text-sm font-medium text-[var(--app-fg)]">Current recommendation</div>
+                                            {accessModeContent.health ? (
+                                                <StatusBadge
+                                                    ok={accessModeContent.health.ok}
+                                                    label={accessModeContent.health.ok ? 'Healthy' : 'Check setup'}
+                                                />
+                                            ) : null}
+                                        </div>
+                                        <div className="mt-2 text-sm text-[var(--app-hint)]">{accessModeContent.summary}</div>
+                                    </div>
+
+                                    {accessModeContent.link ? (
+                                        <UrlRow
+                                            label="Teammate login link"
+                                            value={accessModeContent.link}
+                                            onCopy={copyText}
+                                        />
+                                    ) : (
+                                        <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3 text-sm text-[var(--app-hint)]">
+                                            No login link is available for this mode yet.
+                                        </div>
+                                    )}
+
+                                    <div className="rounded-xl border border-[var(--app-divider)] px-3 py-3">
+                                        <div className="text-sm font-medium text-[var(--app-fg)]">How to use this mode</div>
+                                        <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm text-[var(--app-hint)]">
+                                            {accessModeContent.steps.map((step) => (
+                                                <li key={step}>{step}</li>
+                                            ))}
+                                        </ol>
+                                    </div>
+
+                                    {accessModeContent.snippets.map((snippet) => (
+                                        <SnippetBlock
+                                            key={snippet.title}
+                                            title={snippet.title}
+                                            code={snippet.code}
+                                            onCopy={copyText}
+                                        />
+                                    ))}
                                 </div>
                             ) : null}
                         </div>

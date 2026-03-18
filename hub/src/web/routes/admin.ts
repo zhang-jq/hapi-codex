@@ -5,6 +5,13 @@ import { rotateCliApiToken } from '../../config/cliApiToken'
 import { getAccessUrls } from '../../utils/accessUrls'
 import { getTailscaleStatus } from '../../utils/tailscale'
 
+type AccessHealth = {
+    ok: boolean
+    status?: number
+    message: string
+    checkedAt: number
+}
+
 function getTokenState() {
     const canRotate = !process.env.CLI_API_TOKEN
     return {
@@ -17,13 +24,55 @@ function getTokenState() {
     }
 }
 
+async function probeHealth(url: string): Promise<AccessHealth> {
+    const checkedAt = Date.now()
+    const normalizedUrl = url.replace(/\/+$/, '')
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 3_500)
+
+    try {
+        const response = await fetch(`${normalizedUrl}/health`, {
+            signal: controller.signal
+        })
+        const body = await response.json().catch(() => null) as { status?: unknown } | null
+        if (!response.ok) {
+            return {
+                ok: false,
+                status: response.status,
+                message: `HTTP ${response.status}`,
+                checkedAt
+            }
+        }
+
+        return {
+            ok: body?.status === 'ok',
+            status: response.status,
+            message: body?.status === 'ok' ? 'Reachable' : 'Unexpected health payload',
+            checkedAt
+        }
+    } catch (error) {
+        return {
+            ok: false,
+            message: error instanceof Error ? error.message : String(error),
+            checkedAt
+        }
+    } finally {
+        clearTimeout(timeout)
+    }
+}
+
 export function createAdminRoutes(): Hono<WebAppEnv> {
     const app = new Hono<WebAppEnv>()
 
-    app.get('/admin/overview', (c) => {
+    app.get('/admin/overview', async (c) => {
         const tailscale = getTailscaleStatus()
         const localUrls = getAccessUrls(configuration.listenHost, configuration.listenPort)
         const tailscaleUrls = tailscale.ips.map((ip) => `http://${ip}:${configuration.listenPort}`)
+        const publicUrl = configuration.publicUrl || null
+        const [publicHealth, tailscaleHealth] = await Promise.all([
+            publicUrl ? probeHealth(publicUrl) : Promise.resolve(null),
+            tailscaleUrls.length > 0 ? probeHealth(tailscaleUrls[0]) : Promise.resolve(null)
+        ])
 
         return c.json({
             overview: {
@@ -40,10 +89,12 @@ export function createAdminRoutes(): Hono<WebAppEnv> {
                 token: getTokenState(),
                 access: {
                     localUrls,
-                    publicUrl: configuration.publicUrl || null,
+                    publicUrl,
+                    publicHealth,
                     tailscale: {
                         ...tailscale,
-                        urls: tailscaleUrls
+                        urls: tailscaleUrls,
+                        health: tailscaleHealth
                     }
                 }
             }

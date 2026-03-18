@@ -121,4 +121,12 @@ describe('SettingsPage', () => {
         expect(calledKeys).toContain('settings.display.appearance')
         expect(calledKeys).toContain('settings.display.appearance.system')
     })
+
+    it('uses correct i18n keys for Admin entry', () => {
+        const spyT = renderWithSpyT(<SettingsPage />)
+        const calledKeys = spyT.mock.calls.map((call) => call[0])
+        expect(calledKeys).toContain('settings.admin.title')
+        expect(calledKeys).toContain('settings.admin.entryTitle')
+        expect(calledKeys).toContain('settings.admin.entryDescription')
+    })
 })

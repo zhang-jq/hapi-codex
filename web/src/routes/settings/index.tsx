@@ -405,15 +405,15 @@ export default function SettingsPage() {
                     {/* About section */}
                     <div className="border-b border-[var(--app-divider)]">
                         <div className="px-3 py-2 text-xs font-semibold text-[var(--app-hint)] uppercase tracking-wide">
-                            Admin
+                            {t('settings.admin.title')}
                         </div>
                         <button
                             type="button"
                             onClick={() => navigate({ to: '/admin' })}
                             className="flex w-full items-center justify-between px-3 py-3 text-left transition-colors hover:bg-[var(--app-subtle-bg)]"
                         >
-                            <span className="text-[var(--app-fg)]">Admin & Diagnose</span>
-                            <span className="text-[var(--app-hint)]">Sessions, access, tokens</span>
+                            <span className="text-[var(--app-fg)]">{t('settings.admin.entryTitle')}</span>
+                            <span className="text-[var(--app-hint)]">{t('settings.admin.entryDescription')}</span>
                         </button>
                     </div>
 

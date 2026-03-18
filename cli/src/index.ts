@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
-import { runCli } from './commands/runCli'
+export {}
 
-void runCli()
+const { runCli } = await import('./commands/runCli')
+await runCli()

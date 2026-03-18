@@ -7,12 +7,14 @@ type SubjectAltName = {
     value: string
 }
 
-function parseSubjectAltNames(value: string | undefined): SubjectAltName[] {
+function parseSubjectAltNames(value: string | string[] | undefined): SubjectAltName[] {
     if (!value) {
         return []
     }
 
-    return value
+    const normalized = Array.isArray(value) ? value.join(',') : value
+
+    return normalized
         .split(',')
         .map(entry => entry.trim())
         .map(entry => {
@@ -58,7 +60,7 @@ function hostMatchesCertificate(host: string, cert: PeerCertificate): boolean {
         return altNames.some(name => name.type === 'DNS' && dnsNameMatchesHost(host, name.value))
     }
 
-    const commonName = cert.subject?.CN
+    const commonName = Array.isArray(cert.subject?.CN) ? cert.subject.CN[0] : cert.subject?.CN
     if (!commonName) {
         return false
     }

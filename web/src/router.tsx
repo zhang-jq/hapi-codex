@@ -164,8 +164,8 @@ function SessionsPage() {
                 </div>
             </div>
 
-            <div className={`${isSessionsIndex ? 'hidden lg:flex' : 'flex'} min-w-0 flex-1 flex-col bg-[var(--app-bg)]`}>
-                <div className="flex-1 min-h-0">
+            <div className={`${isSessionsIndex ? 'hidden lg:flex' : 'flex'} min-w-0 flex-1 flex-col overflow-hidden bg-[var(--app-bg)]`}>
+                <div className="flex min-h-0 flex-1 flex-col">
                     <Outlet />
                 </div>
             </div>
@@ -352,7 +352,7 @@ function NewSessionPage() {
     }, [navigate, queryClient])
 
     return (
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden">
             <div className="flex items-center gap-2 border-b border-[var(--app-border)] bg-[var(--app-bg)] p-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
                 {!isTelegramApp() && (
                     <button
@@ -366,19 +366,21 @@ function NewSessionPage() {
                 <div className="flex-1 font-semibold">{t('newSession.title')}</div>
             </div>
 
-            {machinesError ? (
-                <div className="p-3 text-sm text-red-600">
-                    {machinesError}
-                </div>
-            ) : null}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
+                {machinesError ? (
+                    <div className="p-3 text-sm text-red-600">
+                        {machinesError}
+                    </div>
+                ) : null}
 
-            <NewSession
-                api={api}
-                machines={machines}
-                isLoading={machinesLoading}
-                onCancel={handleCancel}
-                onSuccess={handleSuccess}
-            />
+                <NewSession
+                    api={api}
+                    machines={machines}
+                    isLoading={machinesLoading}
+                    onCancel={handleCancel}
+                    onSuccess={handleSuccess}
+                />
+            </div>
         </div>
     )
 }

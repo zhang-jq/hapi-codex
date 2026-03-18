@@ -351,7 +351,7 @@ function AppInner() {
                     <Outlet />
                 </div>
                 <ToastContainer />
-                <InstallPrompt />
+                {pathname !== '/sessions/new' ? <InstallPrompt /> : null}
             </VoiceProvider>
         </AppContextProvider>
     )

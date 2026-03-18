@@ -10,6 +10,7 @@ import { createModeChangeHandler, createRunnerLifecycle, setControlledByUser } f
 import { isPermissionModeAllowedForFlavor } from '@hapi/protocol';
 import { PermissionModeSchema } from '@hapi/protocol/schemas';
 import { formatMessageWithAttachments } from '@/utils/attachmentFormatter';
+import { getWorkingDirectory } from '@/utils/workingDirectory';
 
 const formatFailureReason = (message: string): string => {
     const maxLength = 200;
@@ -26,7 +27,7 @@ export async function runCursor(opts: {
     resumeSessionId?: string;
     model?: string;
 }): Promise<void> {
-    const workingDirectory = process.cwd();
+    const workingDirectory = getWorkingDirectory();
     const startedBy = opts.startedBy ?? 'terminal';
 
     logger.debug(`[cursor] Starting with options: startedBy=${startedBy}`);

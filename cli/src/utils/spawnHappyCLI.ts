@@ -30,6 +30,9 @@ import { join } from 'node:path';
 import { isBunCompiled, projectPath } from '@/projectPath';
 import { logger } from '@/ui/logger';
 import { existsSync } from 'node:fs';
+import { HAPI_SPAWN_TARGET_CWD_ENV } from '@/utils/workingDirectory';
+
+export { HAPI_SPAWN_TARGET_CWD_ENV } from '@/utils/workingDirectory';
 
 /**
  * Resolve the TypeScript entrypoint for development mode.
@@ -108,6 +111,23 @@ export function spawnHappyCLI(args: string[], options: SpawnOptions = {}): Child
   // On Windows, detached processes allocate a new console window by default.
   // windowsHide: true suppresses this to prevent cmd windows from accumulating.
   const finalOptions: SpawnOptions = { ...options };
+  const isBunRuntime = Boolean((process.versions as Record<string, string | undefined>).bun);
+
+  // In Bun development mode, module path aliases only resolve reliably when the
+  // child starts from the CLI package root. Preserve the caller's intended
+  // working directory via env and let src/index.ts chdir after startup.
+  if (!isBunCompiled() && isBunRuntime) {
+    const targetCwd = typeof options.cwd === 'string' && options.cwd.length > 0 ? options.cwd : null;
+    finalOptions.cwd = projectPath();
+    if (targetCwd) {
+      finalOptions.env = {
+        ...process.env,
+        ...options.env,
+        [HAPI_SPAWN_TARGET_CWD_ENV]: targetCwd
+      };
+    }
+  }
+
   if (process.platform === 'win32' && options.detached) {
     finalOptions.windowsHide = true;
   }

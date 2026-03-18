@@ -12,10 +12,20 @@ vi.mock('child_process', async () => {
 });
 
 const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+const originalVersionsDescriptor = Object.getOwnPropertyDescriptor(process, 'versions');
 
 function setPlatform(value: string) {
   Object.defineProperty(process, 'platform', {
     value,
+    configurable: true
+  });
+}
+
+function setBunRuntime(enabled: boolean) {
+  Object.defineProperty(process, 'versions', {
+    value: enabled
+      ? { ...process.versions, bun: process.versions.bun ?? '1.3.10' }
+      : Object.fromEntries(Object.entries(process.versions).filter(([key]) => key !== 'bun')),
     configurable: true
   });
 }
@@ -35,15 +45,22 @@ describe('spawnHappyCLI windowsHide behavior', () => {
     if (!originalPlatformDescriptor?.configurable) {
       throw new Error('process.platform is not configurable in this runtime');
     }
+    if (!originalVersionsDescriptor?.configurable) {
+      throw new Error('process.versions is not configurable in this runtime');
+    }
   });
 
   beforeEach(() => {
     vi.clearAllMocks();
+    setBunRuntime(true);
   });
 
   afterAll(() => {
     if (originalPlatformDescriptor) {
       Object.defineProperty(process, 'platform', originalPlatformDescriptor);
+    }
+    if (originalVersionsDescriptor) {
+      Object.defineProperty(process, 'versions', originalVersionsDescriptor);
     }
   });
 
@@ -87,5 +104,26 @@ describe('spawnHappyCLI windowsHide behavior', () => {
     const options = getSpawnOptionsOrThrow();
     expect(options.detached).toBe(true);
     expect('windowsHide' in options).toBe(false);
+  });
+
+  it('runs Bun dev subprocesses from the CLI project root and forwards requested cwd via env', async () => {
+    setPlatform('darwin');
+    const { spawnHappyCLI, HAPI_SPAWN_TARGET_CWD_ENV } = await import('./spawnHappyCLI');
+    const { projectPath } = await import('@/projectPath');
+
+    spawnHappyCLI(['codex', 'resume', 'session-123'], {
+      cwd: '/tmp/resume-target',
+      stdio: 'ignore',
+      env: {
+        TEST_FLAG: '1'
+      }
+    });
+
+    const options = getSpawnOptionsOrThrow();
+    expect(options.cwd).toBe(projectPath());
+    expect(options.env).toMatchObject({
+      TEST_FLAG: '1',
+      [HAPI_SPAWN_TARGET_CWD_ENV]: '/tmp/resume-target'
+    });
   });
 });

@@ -13,6 +13,7 @@ export function useSessionActions(
 ): {
     abortSession: () => Promise<void>
     archiveSession: () => Promise<void>
+    syncCodexSession: () => Promise<{ normalizedImages: number; indexedAt: string }>
     switchSession: () => Promise<void>
     setPermissionMode: (mode: PermissionMode) => Promise<void>
     setModelMode: (mode: ModelMode) => Promise<void>
@@ -54,6 +55,16 @@ export function useSessionActions(
                 throw new Error('Session unavailable')
             }
             await api.switchSession(sessionId)
+        },
+        onSuccess: () => void invalidateSession(),
+    })
+
+    const syncCodexMutation = useMutation({
+        mutationFn: async () => {
+            if (!api || !sessionId) {
+                throw new Error('Session unavailable')
+            }
+            return await api.syncCodexSession(sessionId)
         },
         onSuccess: () => void invalidateSession(),
     })
@@ -109,6 +120,13 @@ export function useSessionActions(
     return {
         abortSession: abortMutation.mutateAsync,
         archiveSession: archiveMutation.mutateAsync,
+        syncCodexSession: async () => {
+            const result = await syncCodexMutation.mutateAsync()
+            return {
+                normalizedImages: result.normalizedImages,
+                indexedAt: result.indexedAt
+            }
+        },
         switchSession: switchMutation.mutateAsync,
         setPermissionMode: permissionMutation.mutateAsync,
         setModelMode: modelMutation.mutateAsync,
@@ -116,6 +134,7 @@ export function useSessionActions(
         deleteSession: deleteMutation.mutateAsync,
         isPending: abortMutation.isPending
             || archiveMutation.isPending
+            || syncCodexMutation.isPending
             || switchMutation.isPending
             || permissionMutation.isPending
             || modelMutation.isPending

@@ -62,6 +62,7 @@ export default {
 
   // Session actions
   'session.action.rename': '重命名',
+  'session.action.syncCodex': '同步到 Codex',
   'session.action.archive': '归档',
   'session.action.delete': '删除',
   'session.action.copy': '复制',
@@ -92,6 +93,11 @@ export default {
   'button.dismiss': '忽略',
   'button.copy': '复制',
   'button.paste': '粘贴',
+
+  // Toasts
+  'toast.syncCodex.title': '已触发 Codex 同步',
+  'toast.syncCodex.body': '已刷新这条会话在 Codex 的索引，并整理了 {count} 条历史图片记录。',
+  'toast.syncCodex.errorTitle': 'Codex 同步失败',
 
   // New session form
   'newSession.title': '创建会话',

@@ -21,6 +21,7 @@ import { registerAppServerPermissionHandlers } from './utils/appServerPermission
 import { buildThreadStartParams, buildTurnStartParams } from './utils/appServerConfig';
 import { shouldIgnoreTerminalEvent } from './utils/terminalEventGuard';
 import { persistCodexImageAttachments } from './utils/persistCodexImageAttachments';
+import { syncCodexSessionIndex } from './utils/syncCodexSessionIndex';
 import {
     decodeQueuedCodexUserMessage,
     formatQueuedCodexUserMessageForDisplay
@@ -262,6 +263,14 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
             }
 
             if (isTerminalEvent) {
+                if (useAppServer && this.currentThreadId) {
+                    void syncCodexSessionIndex({
+                        sessionId: this.currentThreadId
+                    }).catch((error) => {
+                        logger.debug('[Codex] Failed to refresh session_index for app-server thread', error);
+                    });
+                }
+
                 if (shouldIgnoreTerminalEvent({
                     useAppServer,
                     eventTurnId,

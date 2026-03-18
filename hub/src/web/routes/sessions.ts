@@ -203,6 +203,35 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
         return c.json({ ok: true })
     })
 
+    app.post('/sessions/:id/sync-codex', async (c) => {
+        const engine = requireSyncEngine(c, getSyncEngine)
+        if (engine instanceof Response) {
+            return engine
+        }
+
+        const sessionResult = requireSessionFromParam(c, engine)
+        if (sessionResult instanceof Response) {
+            return sessionResult
+        }
+
+        const namespace = c.get('namespace')
+        const result = await engine.syncCodexSession(sessionResult.sessionId, namespace)
+        if (result.type === 'error') {
+            const status = result.code === 'no_machine_online' ? 503
+                : result.code === 'access_denied' ? 403
+                    : result.code === 'session_not_found' ? 404
+                        : result.code === 'sync_unavailable' ? 400
+                            : 500
+            return c.json({ error: result.message, code: result.code }, status)
+        }
+
+        return c.json({
+            ok: true,
+            normalizedImages: result.normalizedImages,
+            indexedAt: result.indexedAt
+        })
+    })
+
     app.post('/sessions/:id/switch', async (c) => {
         const engine = requireSyncEngine(c, getSyncEngine)
         if (engine instanceof Response) {

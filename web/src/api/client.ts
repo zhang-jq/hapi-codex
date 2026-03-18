@@ -19,6 +19,7 @@ import type {
     SlashCommandsResponse,
     SkillsResponse,
     SpawnResponse,
+    SyncCodexSessionResponse,
     UploadFileResponse,
     VisibilityPayload,
     SessionResponse,
@@ -296,6 +297,13 @@ export class ApiClient {
 
     async archiveSession(sessionId: string): Promise<void> {
         await this.request(`/api/sessions/${encodeURIComponent(sessionId)}/archive`, {
+            method: 'POST',
+            body: JSON.stringify({})
+        })
+    }
+
+    async syncCodexSession(sessionId: string): Promise<SyncCodexSessionResponse> {
+        return await this.request<SyncCodexSessionResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/sync-codex`, {
             method: 'POST',
             body: JSON.stringify({})
         })

@@ -15,6 +15,8 @@ import { registerCommonHandlers } from '../modules/common/registerCommonHandlers
 import type { SpawnSessionOptions, SpawnSessionResult } from '../modules/common/rpcTypes'
 import { applyVersionedAck } from './versionedUpdate'
 import { listCodexSessionsPage } from '@/codex/utils/listCodexSessions'
+import { normalizeCodexSessionImages } from '@/codex/utils/normalizeCodexSessionImages'
+import { syncCodexSessionIndex } from '@/codex/utils/syncCodexSessionIndex'
 
 interface ServerToRunnerEvents {
     update: (data: Update) => void
@@ -89,6 +91,16 @@ interface ImportableSessionsResponse {
     }
 }
 
+interface SyncCodexSessionRequest {
+    codexSessionId?: string
+}
+
+interface SyncCodexSessionResponse {
+    ok: true
+    normalizedImages: number
+    indexedAt: string
+}
+
 export class ApiMachineClient {
     private socket!: Socket<ServerToRunnerEvents, RunnerToServerEvents>
     private keepAliveInterval: NodeJS.Timeout | null = null
@@ -161,6 +173,26 @@ export class ApiMachineClient {
                     ...result.page,
                     total: result.total
                 }
+            }
+        })
+
+        this.rpcHandlerManager.registerHandler<SyncCodexSessionRequest, SyncCodexSessionResponse>('sync-codex-session', async (params) => {
+            const codexSessionId = typeof params?.codexSessionId === 'string' ? params.codexSessionId.trim() : ''
+            if (!codexSessionId) {
+                throw new Error('Codex session ID is required')
+            }
+
+            const normalizedImages = await normalizeCodexSessionImages({
+                sessionId: codexSessionId
+            })
+            await syncCodexSessionIndex({
+                sessionId: codexSessionId
+            })
+
+            return {
+                ok: true,
+                normalizedImages,
+                indexedAt: new Date().toISOString()
             }
         })
     }

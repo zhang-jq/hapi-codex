@@ -7,6 +7,7 @@ import { SessionActionMenu } from '@/components/SessionActionMenu'
 import { RenameSessionDialog } from '@/components/RenameSessionDialog'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useTranslation } from '@/lib/use-translation'
+import { useToast } from '@/lib/toast-context'
 import { formatImportedFrom, isImportedSession } from '@/utils/sessionOrigin'
 
 function getSessionTitle(session: Session): string {
@@ -68,11 +69,14 @@ export function SessionHeader(props: {
     onSessionDeleted?: () => void
 }) {
     const { t } = useTranslation()
+    const { addToast } = useToast()
     const { session, api, onSessionDeleted } = props
     const title = useMemo(() => getSessionTitle(session), [session])
     const worktreeBranch = session.metadata?.worktree?.branch
     const importedFrom = formatImportedFrom(session.metadata)
     const isImported = isImportedSession(session.metadata)
+    const canSyncCodex = session.metadata?.flavor === 'codex'
+        && typeof (session.metadata as { codexSessionId?: unknown } | null | undefined)?.codexSessionId === 'string'
 
     const [menuOpen, setMenuOpen] = useState(false)
     const [menuAnchorPoint, setMenuAnchorPoint] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -82,7 +86,7 @@ export function SessionHeader(props: {
     const [archiveOpen, setArchiveOpen] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
 
-    const { archiveSession, renameSession, deleteSession, isPending } = useSessionActions(
+    const { archiveSession, renameSession, deleteSession, syncCodexSession, isPending } = useSessionActions(
         api,
         session.id,
         session.metadata?.flavor ?? null
@@ -91,6 +95,27 @@ export function SessionHeader(props: {
     const handleDelete = async () => {
         await deleteSession()
         onSessionDeleted?.()
+    }
+
+    const handleSyncCodex = async () => {
+        try {
+            const result = await syncCodexSession()
+            addToast({
+                title: t('toast.syncCodex.title'),
+                body: t('toast.syncCodex.body', { count: result.normalizedImages }),
+                sessionId: session.id,
+                url: `/sessions/${session.id}`
+            })
+        } catch (error) {
+            addToast({
+                title: t('toast.syncCodex.errorTitle'),
+                body: error instanceof Error && error.message
+                    ? error.message
+                    : t('dialog.error.default'),
+                sessionId: session.id,
+                url: `/sessions/${session.id}`
+            })
+        }
     }
 
     const handleMenuToggle = () => {
@@ -187,6 +212,7 @@ export function SessionHeader(props: {
                 isOpen={menuOpen}
                 onClose={() => setMenuOpen(false)}
                 sessionActive={session.active}
+                onSyncCodex={canSyncCodex ? () => { void handleSyncCodex() } : undefined}
                 onRename={() => setRenameOpen(true)}
                 onArchive={() => setArchiveOpen(true)}
                 onDelete={() => setDeleteOpen(true)}

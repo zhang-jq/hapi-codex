@@ -113,13 +113,18 @@ function StatTile(props: {
 function UrlRow(props: {
     label: string
     value: string
+    displayValue?: string
+    hint?: string
     onCopy: (value: string, label: string) => void
 }) {
     return (
         <div className="flex items-start gap-3 rounded-xl border border-[var(--app-divider)] px-3 py-3">
             <div className="min-w-0 flex-1">
                 <div className="text-xs text-[var(--app-hint)]">{props.label}</div>
-                <div className="mt-1 break-all text-sm text-[var(--app-fg)]">{props.value}</div>
+                <div className="mt-1 break-all text-sm text-[var(--app-fg)]">{props.displayValue ?? props.value}</div>
+                {props.hint ? (
+                    <div className="mt-1 text-xs text-[var(--app-hint)]">{props.hint}</div>
+                ) : null}
             </div>
             <button
                 type="button"
@@ -224,6 +229,8 @@ function PolicyToggleCard(props: {
 function SnippetBlock(props: {
     title: string
     code: string
+    displayCode?: string
+    hint?: string
     onCopy: (value: string, label: string) => void
 }) {
     return (
@@ -239,7 +246,10 @@ function SnippetBlock(props: {
                     <CopyIcon />
                 </button>
             </div>
-            <pre className="overflow-x-auto whitespace-pre-wrap break-words px-3 py-3 text-xs text-[var(--app-fg)]">{props.code}</pre>
+            <pre className="overflow-x-auto whitespace-pre-wrap break-words px-3 py-3 text-xs text-[var(--app-fg)]">{props.displayCode ?? props.code}</pre>
+            {props.hint ? (
+                <div className="border-t border-[var(--app-divider)] px-3 py-2 text-xs text-[var(--app-hint)]">{props.hint}</div>
+            ) : null}
         </div>
     )
 }
@@ -269,6 +279,18 @@ function getHostFromUrl(url: string): string {
 
 function isIpLikeHost(host: string): boolean {
     return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':')
+}
+
+function maskTokenizedUrl(value: string): string {
+    try {
+        const parsed = new URL(value)
+        if (parsed.searchParams.has('token')) {
+            parsed.searchParams.set('token', '••••hidden••••')
+        }
+        return parsed.toString()
+    } catch {
+        return value.replace(/([?&]token=)[^&\s]+/g, '$1••••hidden••••')
+    }
 }
 
 function TroubleshootingCard(props: {
@@ -418,12 +440,22 @@ export default function AdminPage() {
         return draftEnabledModes.some((mode, index) => mode !== overview.access.policy.enabledModes[index])
     }, [draftEnabledModes, draftPreferredMode, overview])
 
+    const tokenValue = overview?.token.value ?? ''
+
+    const sanitizeSensitivePreview = (value: string) => {
+        let masked = maskTokenizedUrl(value)
+        if (tokenValue) {
+            masked = masked.split(tokenValue).join('••••hidden••••')
+        }
+        return masked
+    }
+
     const copyText = async (value: string, label: string) => {
         try {
             await navigator.clipboard.writeText(value)
             addToast({
                 title: t('admin.copy.copied', { label }),
-                body: value,
+                body: sanitizeSensitivePreview(value),
                 sessionId: '',
                 url: ''
             })
@@ -439,7 +471,7 @@ export default function AdminPage() {
 
     const buildLoginLink = (entryUrl: string): string => {
         const normalized = entryUrl.replace(/\/+$/, '')
-        return `${normalized}/?token=${encodeURIComponent(overview?.token.value ?? '')}`
+        return `${normalized}/?token=${encodeURIComponent(tokenValue)}`
     }
 
     const toggleDraftMode = (mode: AdminAccessMode) => {
@@ -552,6 +584,10 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
         ? buildLoginLink(overview.access.publicUrl)
         : ''
 
+    const localLoginLinkPreview = localLoginLink ? sanitizeSensitivePreview(localLoginLink) : ''
+    const tailscaleLoginLinkPreview = tailscaleLoginLink ? sanitizeSensitivePreview(tailscaleLoginLink) : ''
+    const publicLoginLinkPreview = publicLoginLink ? sanitizeSensitivePreview(publicLoginLink) : ''
+
     const accessModeContent = useMemo(() => {
         if (!overview) {
             return null
@@ -562,6 +598,7 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                 summary: t('admin.mode.tailscale.summary'),
                 health: overview.access.tailscale.health,
                 link: tailscaleLoginLink,
+                linkPreview: tailscaleLoginLinkPreview,
                 steps: [
                     t('admin.mode.tailscale.step1'),
                     t('admin.mode.tailscale.step2'),
@@ -569,6 +606,7 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                     t('admin.mode.tailscale.step4'),
                 ],
                 shareSnippet: t('admin.mode.tailscale.share', { link: tailscaleLoginLink }),
+                shareSnippetPreview: t('admin.mode.tailscale.share', { link: tailscaleLoginLinkPreview }),
                 snippets: [] as { title: string; code: string }[],
             }
         }
@@ -578,6 +616,7 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                 summary: t('admin.mode.public.summary'),
                 health: overview.access.publicHealth,
                 link: publicLoginLink,
+                linkPreview: publicLoginLinkPreview,
                 steps: [
                     t('admin.mode.public.step1'),
                     t('admin.mode.public.step2'),
@@ -585,6 +624,7 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                     t('admin.mode.public.step4'),
                 ],
                 shareSnippet: t('admin.mode.public.share', { link: publicLoginLink }),
+                shareSnippetPreview: t('admin.mode.public.share', { link: publicLoginLinkPreview }),
                 snippets: [
                     { title: t('admin.snippet.hubEnv'), code: hubEnvSnippet },
                     { title: t('admin.snippet.reverseSsh'), code: vpsTunnelSnippet },
@@ -598,12 +638,14 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
             summary: t('admin.mode.local.summary'),
             health: null,
             link: localLoginLink,
+            linkPreview: localLoginLinkPreview,
             steps: [
                 t('admin.mode.local.step1'),
                 t('admin.mode.local.step2'),
                 t('admin.mode.local.step3'),
             ],
             shareSnippet: t('admin.mode.local.share', { link: localLoginLink }),
+            shareSnippetPreview: t('admin.mode.local.share', { link: localLoginLinkPreview }),
             snippets: [] as { title: string; code: string }[],
         }
     }, [
@@ -612,12 +654,15 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
         localLoginLink,
         overview,
         publicLoginLink,
+        publicLoginLinkPreview,
         publicUsesDomain,
         selectedMode,
         tailscaleLoginLink,
+        tailscaleLoginLinkPreview,
         t,
         vpsNginxSnippet,
         vpsTunnelSnippet,
+        localLoginLinkPreview,
     ])
 
     const troubleshootingItems = useMemo(() => {
@@ -859,6 +904,8 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                                         <UrlRow
                                             label={t('admin.guide.loginLink')}
                                             value={accessModeContent.link}
+                                            displayValue={accessModeContent.linkPreview}
+                                            hint={t('admin.guide.sensitiveNote')}
                                             onCopy={copyText}
                                         />
                                     ) : (
@@ -889,6 +936,8 @@ HAPI_PUBLIC_URL=${preferredPublicUrl}`
                                         <SnippetBlock
                                             title={t('admin.guide.shareMessage')}
                                             code={accessModeContent.shareSnippet}
+                                            displayCode={accessModeContent.shareSnippetPreview}
+                                            hint={t('admin.guide.sensitiveNote')}
                                             onCopy={copyText}
                                         />
                                     ) : null}

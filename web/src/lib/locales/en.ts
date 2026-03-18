@@ -314,6 +314,7 @@ export default {
   'admin.guide.currentDefault': 'Current default recommendation',
   'admin.guide.currentMode': 'Current mode',
   'admin.guide.loginLink': 'User login link',
+  'admin.guide.sensitiveNote': 'The preview hides the token. Use Copy to get the full login link or message.',
   'admin.guide.noLink': 'No login link is available for this mode yet.',
   'admin.guide.howToUse': 'How to use this mode',
   'admin.guide.shareMessage': 'Share Message',

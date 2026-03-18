@@ -316,6 +316,7 @@ export default {
   'admin.guide.currentDefault': '当前默认推荐',
   'admin.guide.currentMode': '当前模式',
   'admin.guide.loginLink': '用户登录链接',
+  'admin.guide.sensitiveNote': '这里的预览会隐藏 token，点击复制后拿到的仍然是完整登录链接或说明。',
   'admin.guide.noLink': '当前模式暂时没有可用的登录链接。',
   'admin.guide.howToUse': '使用步骤',
   'admin.guide.shareMessage': '分享说明',

@@ -13,6 +13,7 @@ import { PermissionModeSchema } from '@hapi/protocol/schemas';
 import { encodeQueuedCodexUserMessage } from './utils/queuedUserMessage';
 import { replayCodexSessionHistory } from './utils/importCodexSessionHistory';
 import { getWorkingDirectory } from '@/utils/workingDirectory';
+import { normalizeCodexSessionImages } from './utils/normalizeCodexSessionImages';
 
 export { emitReadyIfIdle } from './utils/emitReadyIfIdle';
 
@@ -54,6 +55,12 @@ export async function runCodex(opts: {
             }));
         }
         try {
+            const normalizedLegacyImages = await normalizeCodexSessionImages({
+                sessionId: opts.resumeSessionId
+            });
+            if (normalizedLegacyImages > 0) {
+                logger.debug(`[codex] Normalized ${normalizedLegacyImages} legacy image events for resumed session ${opts.resumeSessionId}`);
+            }
             await session.flush({ timeoutMs: 5_000 });
             const importedCount = await replayCodexSessionHistory(session, {
                 sessionId: opts.resumeSessionId

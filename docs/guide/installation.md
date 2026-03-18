@@ -284,6 +284,26 @@ Access via your Tailscale IP:
 ```
 http://100.x.x.x:3006
 ```
+
+For a source checkout of `hapi-codex`, the recommended flow is:
+
+```bash
+./scripts/start-source-hub.sh
+./scripts/start-source-runner.sh
+```
+
+Then run diagnostics:
+
+```bash
+bun --cwd cli run src/index.ts doctor
+```
+
+The doctor output includes:
+
+- current hub URL and token status
+- runner status
+- detected Tailscale hostname / IPs
+- direct access URLs for the current listen port
 </details>
 
 <details>
@@ -502,7 +522,45 @@ launchctl unload ~/Library/LaunchAgents/com.hapi.runner.plist
 > caffeinate -dimsu hapi hub --relay
 > ```
 > Or run `caffeinate -dimsu` in a separate terminal while HAPI is running.
+
+For this fork's source-based workflow, use the ready-made templates and installer instead:
+
+```bash
+./deploy/macos/install-source-launchagents.sh
+```
+
+This installs:
+
+- `com.hapi-codex.hub`
+- `com.hapi-codex.runner`
+
+To remove them:
+
+```bash
+./deploy/macos/uninstall-source-launchagents.sh
+```
+
+Logs are written to:
+
+```bash
+~/.hapi/logs/source-hub.log
+~/.hapi/logs/source-runner.log
+```
 </details>
+
+### Token rotation
+
+Rotate the file-backed shared access token:
+
+```bash
+bun --cwd cli run src/index.ts hub token rotate
+```
+
+Notes:
+
+- This only rotates the token stored in `~/.hapi/settings.json`
+- If `CLI_API_TOKEN` is set via environment variable, rotation will refuse to run
+- Restart running hub / runner processes after rotation so they pick up the new token
 
 <details>
 <summary>Linux: systemd</summary>

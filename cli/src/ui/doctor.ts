@@ -16,6 +16,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isBunCompiled, projectPath, runtimePath } from '@/projectPath'
 import packageJson from '../../package.json'
+import { getTailscaleStatus } from '@/utils/tailscale'
 
 /**
  * Get relevant environment information for debugging
@@ -44,6 +45,55 @@ export function getEnvironmentInfo(): Record<string, any> {
         shell: process.env.SHELL,
         terminal: process.env.TERM,
     };
+}
+
+async function checkHubConnectivity(apiUrl: string, accessToken: string | null): Promise<{
+    ok: boolean
+    status?: number
+    message: string
+}> {
+    if (!accessToken) {
+        return {
+            ok: false,
+            message: 'CLI_API_TOKEN is missing'
+        }
+    }
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 4_000)
+
+    try {
+        const response = await fetch(`${apiUrl.replace(/\/$/, '')}/api/auth`, {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({ accessToken }),
+            signal: controller.signal
+        })
+
+        const json = await response.json().catch(() => null) as { error?: unknown } | null
+        if (response.ok) {
+            return {
+                ok: true,
+                status: response.status,
+                message: 'Authentication endpoint is reachable'
+            }
+        }
+
+        return {
+            ok: false,
+            status: response.status,
+            message: typeof json?.error === 'string' ? json.error : `HTTP ${response.status}`
+        }
+    } catch (error) {
+        return {
+            ok: false,
+            message: error instanceof Error ? error.message : String(error)
+        }
+    } finally {
+        clearTimeout(timeout)
+    }
 }
 
 function getLogFiles(logDir: string): { file: string, path: string, modified: Date }[] {
@@ -145,6 +195,47 @@ export async function runDoctorCommand(filter?: 'all' | 'runner'): Promise<void>
         } else {
             console.log(chalk.red('❌ CLI_API_TOKEN is not set'));
             console.log(chalk.gray('  Run `hapi auth login` to configure or set CLI_API_TOKEN env var'));
+        }
+
+        const serverPort = typeof settings.listenPort === 'number' ? settings.listenPort : 3006
+        const publicUrl = typeof settings.publicUrl === 'string' && settings.publicUrl.trim().length > 0
+            ? settings.publicUrl.trim()
+            : null
+        const tailscaleStatus = getTailscaleStatus()
+
+        console.log(chalk.bold('\n🛜 Tailscale'));
+        if (!tailscaleStatus.installed) {
+            console.log(chalk.gray('tailscale CLI not installed'))
+        } else if (!tailscaleStatus.running) {
+            console.log(chalk.yellow(`⚠️  Not connected${tailscaleStatus.backendState ? ` (${tailscaleStatus.backendState})` : ''}`))
+            if (tailscaleStatus.error) {
+                console.log(chalk.gray(`  ${tailscaleStatus.error}`))
+            }
+        } else {
+            console.log(chalk.green('✓ Tailscale connected'))
+            if (tailscaleStatus.hostname) {
+                console.log(`  Device: ${chalk.blue(tailscaleStatus.hostname)}`)
+            }
+            if (tailscaleStatus.ips.length > 0) {
+                console.log(`  IPs: ${chalk.blue(tailscaleStatus.ips.join(', '))}`)
+                console.log(chalk.gray('  Access URLs:'))
+                for (const ip of tailscaleStatus.ips) {
+                    console.log(chalk.gray(`    http://${ip}:${serverPort}`))
+                }
+            }
+        }
+
+        console.log(chalk.bold('\n🌐 Hub Connectivity'));
+        const connectivity = await checkHubConnectivity(configuration.apiUrl, envToken || settingsToken || null)
+        if (connectivity.ok) {
+            console.log(chalk.green(`✓ ${configuration.apiUrl} (${connectivity.message})`))
+        } else {
+            const suffix = connectivity.status ? ` [HTTP ${connectivity.status}]` : ''
+            console.log(chalk.red(`❌ ${configuration.apiUrl}${suffix}`))
+            console.log(chalk.gray(`  ${connectivity.message}`))
+        }
+        if (publicUrl) {
+            console.log(`  Public URL: ${chalk.blue(publicUrl)}`)
         }
 
     }

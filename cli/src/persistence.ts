@@ -21,6 +21,11 @@ interface Settings {
   apiUrl?: string
   // Legacy field name (for migration, read-only)
   serverUrl?: string
+  // Server-side settings persisted by the hub
+  listenHost?: string
+  listenPort?: number
+  publicUrl?: string
+  corsOrigins?: string[]
 }
 
 const defaultSettings: Settings = {}

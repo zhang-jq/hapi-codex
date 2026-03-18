@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.hapi-codex.runner</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__REPO_DIR__/scripts/start-source-runner.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>BUN_BIN</key>
+    <string>__BUN_BIN__</string>
+    <key>HAPI_API_URL</key>
+    <string>http://127.0.0.1:3006</string>
+    <key>HAPI_LISTEN_PORT</key>
+    <string>3006</string>
+  </dict>
+  <key>WorkingDirectory</key>
+  <string>__REPO_DIR__</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>__HOME__/.hapi/logs/source-runner.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/.hapi/logs/source-runner.log</string>
+</dict>
+</plist>

@@ -118,3 +118,28 @@ export async function getOrCreateCliApiToken(dataDir: string): Promise<CliApiTok
         filePath: settingsFile
     }
 }
+
+export async function rotateCliApiToken(dataDir: string): Promise<CliApiTokenResult> {
+    if (process.env.CLI_API_TOKEN) {
+        throw new Error('Cannot rotate CLI_API_TOKEN while the environment variable is set. Update or unset CLI_API_TOKEN first.')
+    }
+
+    const settingsFile = getSettingsFile(dataDir)
+    const settings = await readSettings(settingsFile)
+    if (settings === null) {
+        throw new Error(`Cannot read ${settingsFile}. Fix or remove the file before rotating the token.`)
+    }
+
+    const token = generateSecureToken()
+    await writeSettings(settingsFile, {
+        ...(settings ?? {}),
+        cliApiToken: token
+    })
+
+    return {
+        token,
+        source: 'generated',
+        isNew: false,
+        filePath: settingsFile
+    }
+}

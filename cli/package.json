@@ -1,15 +1,15 @@
 {
   "name": "@twsxtd/hapi",
   "version": "0.16.1",
-  "description": "App for agentic coding - access coding agent anywhere",
+  "description": "Codex-first fork of HAPI for mobile handoff, image input, and existing session resume",
   "author": "Kirill Dubovitskiy & weishu",
   "license": "AGPL-3.0-only",
   "type": "module",
-  "homepage": "https://github.com/tiann/hapi",
-  "bugs": "https://github.com/tiann/hapi/issues",
+  "homepage": "https://github.com/zhang-jq/hapi-codex",
+  "bugs": "https://github.com/zhang-jq/hapi-codex/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tiann/hapi.git",
+    "url": "git+https://github.com/zhang-jq/hapi-codex.git",
     "directory": "cli"
   },
   "bin": {
@@ -35,6 +35,7 @@
   "scripts": {
     "postinstall": "node -e \"try{require('fs').chmodSync(require('path').join(__dirname,'bin','hapi.cjs'),0o755)}catch(e){}\"",
     "typecheck": "tsc --noEmit",
+    "build": "bun build src/index.ts --outdir dist --target bun",
     "build:exe": "bun run scripts/build-executable.ts",
     "build:exe:all": "bun run scripts/build-executable.ts --all",
     "build:exe:allinone": "bun run scripts/build-executable.ts --with-web-assets",

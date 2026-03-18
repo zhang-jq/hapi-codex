@@ -390,6 +390,19 @@ export class SessionCache {
             changed = true
         }
 
+        if (oldObj.sessionOrigin === 'imported' && newObj.sessionOrigin !== 'imported') {
+            merged.sessionOrigin = 'imported'
+            changed = true
+        }
+        if (typeof oldObj.importedFrom === 'string' && typeof newObj.importedFrom !== 'string') {
+            merged.importedFrom = oldObj.importedFrom
+            changed = true
+        }
+        if (typeof oldObj.importedAt === 'number' && typeof newObj.importedAt !== 'number') {
+            merged.importedAt = oldObj.importedAt
+            changed = true
+        }
+
         if (typeof oldObj.path === 'string' && typeof newObj.path !== 'string') {
             merged.path = oldObj.path
             changed = true

@@ -44,6 +44,25 @@ export type RpcPathExistsResponse = {
     exists: Record<string, boolean>
 }
 
+export type RpcImportableSession = {
+    id: string
+    title: string
+    cwd: string
+    updatedAt: number
+    originator?: string
+}
+
+export type RpcImportableSessionsResponse = {
+    sessions: RpcImportableSession[]
+    directories: string[]
+    page: {
+        limit: number
+        offset: number
+        total: number
+        hasMore: boolean
+    }
+}
+
 export class RpcGateway {
     constructor(
         private readonly io: Server,
@@ -111,13 +130,14 @@ export class RpcGateway {
         yolo?: boolean,
         sessionType?: 'simple' | 'worktree',
         worktreeName?: string,
-        resumeSessionId?: string
+        resumeSessionId?: string,
+        resumeOriginator?: string
     ): Promise<{ type: 'success'; sessionId: string } | { type: 'error'; message: string }> {
         try {
             const result = await this.machineRpc(
                 machineId,
                 'spawn-happy-session',
-                { type: 'spawn-in-directory', directory, agent, model, yolo, sessionType, worktreeName, resumeSessionId }
+                { type: 'spawn-in-directory', directory, agent, model, yolo, sessionType, worktreeName, resumeSessionId, resumeOriginator }
             )
             if (result && typeof result === 'object') {
                 const obj = result as Record<string, unknown>
@@ -168,6 +188,61 @@ export class RpcGateway {
             exists[key] = value === true
         }
         return exists
+    }
+
+    async listImportableSessions(
+        machineId: string,
+        agent: 'codex',
+        options?: {
+            limit?: number
+            offset?: number
+            titleQuery?: string
+            cwdQuery?: string
+        }
+    ): Promise<RpcImportableSessionsResponse> {
+        const limit = options?.limit ?? 10
+        const offset = options?.offset ?? 0
+        const result = await this.machineRpc(
+            machineId,
+            'list-importable-sessions',
+            {
+                agent,
+                limit,
+                offset,
+                titleQuery: options?.titleQuery,
+                cwdQuery: options?.cwdQuery
+            }
+        ) as RpcImportableSessionsResponse | unknown
+
+        if (!result || typeof result !== 'object') {
+            throw new Error('Unexpected list-importable-sessions result')
+        }
+
+        const response = result as RpcImportableSessionsResponse
+        const sessionsValue = response.sessions
+        if (!Array.isArray(sessionsValue) || !Array.isArray(response.directories) || !response.page || typeof response.page !== 'object') {
+            throw new Error('Unexpected list-importable-sessions result')
+        }
+
+        return {
+            sessions: sessionsValue
+                .filter((session): session is RpcImportableSession =>
+                    Boolean(
+                        session
+                        && typeof session.id === 'string'
+                        && typeof session.title === 'string'
+                        && typeof session.cwd === 'string'
+                        && typeof session.updatedAt === 'number'
+                    )
+                ),
+            directories: response.directories.filter((value): value is string => typeof value === 'string' && value.length > 0),
+            page: {
+                limit: typeof response.page.limit === 'number' ? response.page.limit : limit,
+                offset: typeof response.page.offset === 'number' ? response.page.offset : offset,
+                total: typeof response.page.total === 'number' ? response.page.total : sessionsValue.length,
+                hasMore: response.page.hasMore === true
+            }
+        }
     }
 
     async getGitStatus(sessionId: string, cwd?: string): Promise<RpcCommandResponse> {

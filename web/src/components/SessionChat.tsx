@@ -42,6 +42,10 @@ export function SessionChat(props: {
     const { haptic } = usePlatform()
     const navigate = useNavigate()
     const sessionInactive = !props.session.active
+    const showImportedCodexHint =
+        props.session.metadata?.flavor === 'codex'
+        && !props.isLoadingMessages
+        && props.messages.length === 0
     const normalizedCacheRef = useRef<Map<string, { source: DecryptedMessage; normalized: NormalizedMessage | null }>>(new Map())
     const blocksByIdRef = useRef<Map<string, ChatBlock>>(new Map())
     const [forceScrollToken, setForceScrollToken] = useState(0)
@@ -283,6 +287,14 @@ export function SessionChat(props: {
                 <div className="px-3 pt-3">
                     <div className="mx-auto w-full max-w-content rounded-md bg-[var(--app-subtle-bg)] p-3 text-sm text-[var(--app-hint)]">
                         Session is inactive. Sending will resume it automatically.
+                    </div>
+                </div>
+            ) : null}
+
+            {showImportedCodexHint ? (
+                <div className="px-3 pt-3">
+                    <div className="mx-auto w-full max-w-content rounded-md border border-[var(--app-border)] bg-[var(--app-subtle-bg)] p-3 text-sm text-[var(--app-hint)]">
+                        This Codex session is connected. Imported history includes recent user prompts, image attachments, and assistant final answers. Send a new message to continue the same thread.
                     </div>
                 </div>
             ) : null}

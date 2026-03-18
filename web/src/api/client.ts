@@ -6,6 +6,8 @@ import type {
     FileReadResponse,
     FileSearchResponse,
     GitCommandResponse,
+    ImportableSessionsResponse,
+    ImportableSessionsQuery,
     MachinePathsExistsResponse,
     MachinesResponse,
     MessagesResponse,
@@ -369,6 +371,31 @@ export class ApiClient {
         )
     }
 
+    async getImportableSessions(
+        machineId: string,
+        agent: 'codex',
+        options?: ImportableSessionsQuery
+    ): Promise<ImportableSessionsResponse> {
+        const limit = options?.limit ?? 10
+        const params = new URLSearchParams({
+            agent,
+            limit: String(limit)
+        })
+        if (options?.offset !== undefined) {
+            params.set('offset', String(options.offset))
+        }
+        if (options?.titleQuery) {
+            params.set('titleQuery', options.titleQuery)
+        }
+        if (options?.cwdQuery) {
+            params.set('cwdQuery', options.cwdQuery)
+        }
+
+        return await this.request<ImportableSessionsResponse>(
+            `/api/machines/${encodeURIComponent(machineId)}/importable-sessions?${params.toString()}`
+        )
+    }
+
     async spawnSession(
         machineId: string,
         directory: string,
@@ -376,11 +403,13 @@ export class ApiClient {
         model?: string,
         yolo?: boolean,
         sessionType?: 'simple' | 'worktree',
-        worktreeName?: string
+        worktreeName?: string,
+        resumeSessionId?: string,
+        resumeOriginator?: string
     ): Promise<SpawnResponse> {
         return await this.request<SpawnResponse>(`/api/machines/${encodeURIComponent(machineId)}/spawn`, {
             method: 'POST',
-            body: JSON.stringify({ directory, agent, model, yolo, sessionType, worktreeName })
+            body: JSON.stringify({ directory, agent, model, yolo, sessionType, worktreeName, resumeSessionId, resumeOriginator })
         })
     }
 

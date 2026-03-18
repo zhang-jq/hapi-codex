@@ -10,11 +10,21 @@ const spawnBodySchema = z.object({
     model: z.string().optional(),
     yolo: z.boolean().optional(),
     sessionType: z.enum(['simple', 'worktree']).optional(),
-    worktreeName: z.string().optional()
+    worktreeName: z.string().optional(),
+    resumeSessionId: z.string().min(1).optional(),
+    resumeOriginator: z.string().min(1).optional()
 })
 
 const pathsExistsSchema = z.object({
     paths: z.array(z.string().min(1)).max(1000)
+})
+
+const importableSessionsQuerySchema = z.object({
+    agent: z.enum(['codex']).default('codex'),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    offset: z.coerce.number().int().min(0).optional(),
+    titleQuery: z.string().optional(),
+    cwdQuery: z.string().optional()
 })
 
 export function createMachinesRoutes(getSyncEngine: () => SyncEngine | null): Hono<WebAppEnv> {
@@ -56,9 +66,45 @@ export function createMachinesRoutes(getSyncEngine: () => SyncEngine | null): Ho
             parsed.data.model,
             parsed.data.yolo,
             parsed.data.sessionType,
-            parsed.data.worktreeName
+            parsed.data.worktreeName,
+            parsed.data.resumeSessionId,
+            parsed.data.resumeOriginator
         )
         return c.json(result)
+    })
+
+    app.get('/machines/:id/importable-sessions', async (c) => {
+        const engine = getSyncEngine()
+        if (!engine) {
+            return c.json({ error: 'Not connected' }, 503)
+        }
+
+        const machineId = c.req.param('id')
+        const machine = requireMachine(c, engine, machineId)
+        if (machine instanceof Response) {
+            return machine
+        }
+
+        const parsed = importableSessionsQuerySchema.safeParse(c.req.query())
+        if (!parsed.success) {
+            return c.json({ error: 'Invalid query' }, 400)
+        }
+
+        try {
+            const sessions = await engine.listImportableSessions(
+                machineId,
+                parsed.data.agent,
+                {
+                    limit: parsed.data.limit,
+                    offset: parsed.data.offset,
+                    titleQuery: parsed.data.titleQuery?.trim() || undefined,
+                    cwdQuery: parsed.data.cwdQuery?.trim() || undefined
+                }
+            )
+            return c.json(sessions)
+        } catch (error) {
+            return c.json({ error: error instanceof Error ? error.message : 'Failed to list importable sessions' }, 500)
+        }
     })
 
     app.post('/machines/:id/paths/exists', async (c) => {

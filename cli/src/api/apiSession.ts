@@ -18,6 +18,7 @@ import {
 } from '@hapi/protocol'
 import type {
     AgentState,
+    AttachmentMetadata,
     MessageContent,
     MessageMeta,
     Metadata,
@@ -368,8 +369,8 @@ export class ApiSessionClient extends EventEmitter {
         }
     }
 
-    sendUserMessage(text: string, meta?: MessageMeta): void {
-        if (!text) {
+    sendUserMessage(text: string, meta?: MessageMeta, attachments?: AttachmentMetadata[]): void {
+        if (!text && (!attachments || attachments.length === 0)) {
             return
         }
 
@@ -377,7 +378,8 @@ export class ApiSessionClient extends EventEmitter {
             role: 'user',
             content: {
                 type: 'text',
-                text
+                text,
+                attachments
             },
             meta: {
                 sentFrom: 'cli',

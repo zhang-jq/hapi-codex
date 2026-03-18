@@ -11,6 +11,8 @@ import { createModeChangeHandler, createRunnerLifecycle, setControlledByUser } f
 import { isPermissionModeAllowedForFlavor } from '@hapi/protocol';
 import { PermissionModeSchema } from '@hapi/protocol/schemas';
 import { encodeQueuedCodexUserMessage } from './utils/queuedUserMessage';
+import { replayCodexSessionHistory } from './utils/importCodexSessionHistory';
+import { getWorkingDirectory } from '@/utils/workingDirectory';
 
 export { emitReadyIfIdle } from './utils/emitReadyIfIdle';
 
@@ -21,8 +23,10 @@ export async function runCodex(opts: {
     resumeSessionId?: string;
     model?: string;
 }): Promise<void> {
-    const workingDirectory = process.cwd();
+    const workingDirectory = getWorkingDirectory();
     const startedBy = opts.startedBy ?? 'terminal';
+    const importedFrom = process.env.HAPI_IMPORTED_FROM?.trim() || null;
+    const isImportedSession = process.env.HAPI_IMPORTED_SESSION === '1';
 
     logger.debug(`[codex] Starting with options: startedBy=${startedBy}`);
 
@@ -39,6 +43,27 @@ export async function runCodex(opts: {
     const startingMode: 'local' | 'remote' = startedBy === 'runner' ? 'remote' : 'local';
 
     setControlledByUser(session, startingMode);
+
+    if (opts.resumeSessionId) {
+        if (isImportedSession) {
+            session.updateMetadata((currentMetadata) => ({
+                ...currentMetadata,
+                sessionOrigin: 'imported',
+                importedFrom: importedFrom ?? currentMetadata.importedFrom,
+                importedAt: currentMetadata.importedAt ?? Date.now()
+            }));
+        }
+        try {
+            await session.flush({ timeoutMs: 5_000 });
+            const importedCount = await replayCodexSessionHistory(session, {
+                sessionId: opts.resumeSessionId
+            });
+            await session.flush({ timeoutMs: 10_000 });
+            logger.debug(`[codex] Imported ${importedCount} historical messages for resumed session ${opts.resumeSessionId}`);
+        } catch (error) {
+            logger.debug('[codex] Failed to import Codex session history', error);
+        }
+    }
 
     const messageQueue = new MessageQueue2<EnhancedMode>((mode) => hashObject({
         permissionMode: mode.permissionMode,

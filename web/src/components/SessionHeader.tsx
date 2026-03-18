@@ -7,6 +7,7 @@ import { SessionActionMenu } from '@/components/SessionActionMenu'
 import { RenameSessionDialog } from '@/components/RenameSessionDialog'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useTranslation } from '@/lib/use-translation'
+import { formatImportedFrom, isImportedSession } from '@/utils/sessionOrigin'
 
 function getSessionTitle(session: Session): string {
     if (session.metadata?.name) {
@@ -70,6 +71,8 @@ export function SessionHeader(props: {
     const { session, api, onSessionDeleted } = props
     const title = useMemo(() => getSessionTitle(session), [session])
     const worktreeBranch = session.metadata?.worktree?.branch
+    const importedFrom = formatImportedFrom(session.metadata)
+    const isImported = isImportedSession(session.metadata)
 
     const [menuOpen, setMenuOpen] = useState(false)
     const [menuAnchorPoint, setMenuAnchorPoint] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -138,6 +141,12 @@ export function SessionHeader(props: {
                                 <span aria-hidden="true">❖</span>
                                 {session.metadata?.flavor?.trim() || 'unknown'}
                             </span>
+                            {isImported ? (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--app-border)] px-2 py-0.5">
+                                    {t('session.item.imported')}
+                                    {importedFrom ? ` · ${importedFrom}` : ''}
+                                </span>
+                            ) : null}
                             <span>
                                 {t('session.item.modelMode')}: {session.modelMode || 'default'}
                             </span>

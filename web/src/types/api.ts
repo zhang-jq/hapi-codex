@@ -32,6 +32,9 @@ export type SessionMetadataSummary = {
     machineId?: string
     tools?: string[]
     flavor?: string | null
+    sessionOrigin?: 'spawned' | 'imported'
+    importedFrom?: string
+    importedAt?: number
     worktree?: WorktreeMetadata
 }
 
@@ -94,6 +97,30 @@ export type MessagesResponse = {
 
 export type MachinesResponse = { machines: Machine[] }
 export type MachinePathsExistsResponse = { exists: Record<string, boolean> }
+export type ImportableSession = {
+    id: string
+    title: string
+    cwd: string
+    updatedAt: number
+    originator?: string
+}
+export type ImportableSessionsQuery = {
+    limit?: number
+    offset?: number
+    titleQuery?: string
+    cwdQuery?: string
+}
+export type ImportableSessionsPage = {
+    limit: number
+    offset: number
+    total: number
+    hasMore: boolean
+}
+export type ImportableSessionsResponse = {
+    sessions: ImportableSession[]
+    directories: string[]
+    page: ImportableSessionsPage
+}
 
 export type SpawnResponse =
     | { type: 'success'; sessionId: string }

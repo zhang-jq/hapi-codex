@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { ApiClient } from '@/api/client'
 import type { Machine } from '@/types/api'
 import { usePlatform } from '@/hooks/usePlatform'
@@ -6,11 +6,14 @@ import { useSpawnSession } from '@/hooks/mutations/useSpawnSession'
 import { useSessions } from '@/hooks/queries/useSessions'
 import { useActiveSuggestions, type Suggestion } from '@/hooks/useActiveSuggestions'
 import { useDirectorySuggestions } from '@/hooks/useDirectorySuggestions'
+import { useImportableSessions } from '@/hooks/queries/useImportableSessions'
 import { useRecentPaths } from '@/hooks/useRecentPaths'
+import type { ImportableSession } from '@/types/api'
 import type { AgentType, SessionType } from './types'
 import { ActionButtons } from './ActionButtons'
 import { AgentSelector } from './AgentSelector'
 import { DirectorySection } from './DirectorySection'
+import { ImportableSessionsSection } from './ImportableSessionsSection'
 import { MachineSelector } from './MachineSelector'
 import { ModelSelector } from './ModelSelector'
 import {
@@ -22,6 +25,8 @@ import {
 import { SessionTypeSelector } from './SessionTypeSelector'
 import { YoloToggle } from './YoloToggle'
 import { formatRunnerSpawnError } from '../../utils/formatRunnerSpawnError'
+
+const IMPORT_PAGE_SIZE = 10
 
 export function NewSession(props: {
     api: ApiClient
@@ -47,7 +52,13 @@ export function NewSession(props: {
     const [sessionType, setSessionType] = useState<SessionType>('simple')
     const [worktreeName, setWorktreeName] = useState('')
     const [error, setError] = useState<string | null>(null)
+    const [resumingSessionId, setResumingSessionId] = useState<string | null>(null)
+    const [importTitleQuery, setImportTitleQuery] = useState('')
+    const [importCwdQuery, setImportCwdQuery] = useState('')
+    const [importPage, setImportPage] = useState(0)
     const worktreeInputRef = useRef<HTMLInputElement>(null)
+    const deferredImportTitleQuery = useDeferredValue(importTitleQuery)
+    const deferredImportCwdQuery = useDeferredValue(importCwdQuery)
 
     useEffect(() => {
         if (sessionType === 'worktree') {
@@ -98,6 +109,20 @@ export function NewSession(props: {
     )
 
     const allPaths = useDirectorySuggestions(machineId, sessions, recentPaths)
+    const {
+        sessions: importableSessions,
+        directories: importableDirectories,
+        page: importableSessionsPage,
+        isLoading: isLoadingImportableSessions,
+        isRefreshing: isRefreshingImportableSessions,
+        error: importableSessionsError,
+        refetch: refetchImportableSessions
+    } = useImportableSessions(props.api, machineId, agent, {
+        limit: IMPORT_PAGE_SIZE,
+        offset: importPage * IMPORT_PAGE_SIZE,
+        titleQuery: deferredImportTitleQuery,
+        cwdQuery: deferredImportCwdQuery
+    })
 
     const pathsToCheck = useMemo(
         () => Array.from(new Set(allPaths)).slice(0, 1000),
@@ -154,6 +179,9 @@ export function NewSession(props: {
 
     const handleMachineChange = useCallback((newMachineId: string) => {
         setMachineId(newMachineId)
+        setImportTitleQuery('')
+        setImportCwdQuery('')
+        setImportPage(0)
         const paths = getRecentPaths(newMachineId)
         if (paths[0]) {
             setDirectory(paths[0])
@@ -164,6 +192,24 @@ export function NewSession(props: {
 
     const handlePathClick = useCallback((path: string) => {
         setDirectory(path)
+    }, [])
+
+    const handleImportTitleQueryChange = useCallback((value: string) => {
+        setImportPage(0)
+        setImportTitleQuery(value)
+    }, [])
+
+    const handleImportCwdQueryChange = useCallback((value: string) => {
+        setImportPage(0)
+        setImportCwdQuery(value)
+    }, [])
+
+    const handleImportPreviousPage = useCallback(() => {
+        setImportPage((current) => Math.max(0, current - 1))
+    }, [])
+
+    const handleImportNextPage = useCallback(() => {
+        setImportPage((current) => current + 1)
     }, [])
 
     const handleSuggestionSelect = useCallback((index: number) => {
@@ -246,10 +292,46 @@ export function NewSession(props: {
         }
     }
 
+    async function handleResumeExistingSession(session: ImportableSession) {
+        if (!machineId) return
+
+        setError(null)
+        setResumingSessionId(session.id)
+        try {
+            const resolvedModel = model !== 'auto' ? model : undefined
+            const result = await spawnSession({
+                machineId,
+                directory: session.cwd,
+                agent: 'codex',
+                model: resolvedModel,
+                yolo: yoloMode,
+                resumeSessionId: session.id,
+                resumeOriginator: session.originator
+            })
+
+            if (result.type === 'success') {
+                haptic.notification('success')
+                setLastUsedMachineId(machineId)
+                addRecentPath(machineId, session.cwd)
+                await props.api.renameSession(result.sessionId, session.title).catch(() => undefined)
+                props.onSuccess(result.sessionId)
+                return
+            }
+
+            haptic.notification('error')
+            setError(result.message)
+        } catch (e) {
+            haptic.notification('error')
+            setError(e instanceof Error ? e.message : 'Failed to resume session')
+        } finally {
+            setResumingSessionId(null)
+        }
+    }
+
     const canCreate = Boolean(machineId && directory.trim() && !isFormDisabled)
 
     return (
-        <div className="flex flex-col divide-y divide-[var(--app-divider)]">
+        <div className="flex min-h-full flex-col divide-y divide-[var(--app-divider)]">
             <MachineSelector
                 machines={props.machines}
                 machineId={machineId}
@@ -261,6 +343,31 @@ export function NewSession(props: {
                 <div className="px-3 py-2 text-xs text-red-600">
                     Runner last spawn error: {runnerSpawnError}
                 </div>
+            ) : null}
+            {machineId ? (
+                <ImportableSessionsSection
+                    agentIsCodex={agent === 'codex'}
+                    sessions={importableSessions}
+                    isLoading={isLoadingImportableSessions}
+                    isRefreshing={isRefreshingImportableSessions}
+                    error={importableSessionsError}
+                    isDisabled={isFormDisabled}
+                    activeSessionId={resumingSessionId}
+                    titleQuery={importTitleQuery}
+                    cwdQuery={importCwdQuery}
+                    directories={importableDirectories}
+                    total={importableSessionsPage.total}
+                    limit={importableSessionsPage.limit}
+                    offset={importableSessionsPage.offset}
+                    hasMore={importableSessionsPage.hasMore}
+                    onSwitchToCodex={() => setAgent('codex')}
+                    onRefresh={refetchImportableSessions}
+                    onTitleQueryChange={handleImportTitleQueryChange}
+                    onCwdQueryChange={handleImportCwdQueryChange}
+                    onPreviousPage={handleImportPreviousPage}
+                    onNextPage={handleImportNextPage}
+                    onResume={handleResumeExistingSession}
+                />
             ) : null}
             <DirectorySection
                 directory={directory}

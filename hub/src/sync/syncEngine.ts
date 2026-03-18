@@ -19,6 +19,7 @@ import {
     RpcGateway,
     type RpcCommandResponse,
     type RpcDeleteUploadResponse,
+    type RpcImportableSession,
     type RpcListDirectoryResponse,
     type RpcPathExistsResponse,
     type RpcReadFileResponse,
@@ -32,6 +33,7 @@ export type { SyncEventListener } from './eventPublisher'
 export type {
     RpcCommandResponse,
     RpcDeleteUploadResponse,
+    RpcImportableSession,
     RpcListDirectoryResponse,
     RpcPathExistsResponse,
     RpcReadFileResponse,
@@ -305,9 +307,10 @@ export class SyncEngine {
         yolo?: boolean,
         sessionType?: 'simple' | 'worktree',
         worktreeName?: string,
-        resumeSessionId?: string
+        resumeSessionId?: string,
+        resumeOriginator?: string
     ): Promise<{ type: 'success'; sessionId: string } | { type: 'error'; message: string }> {
-        return await this.rpcGateway.spawnSession(machineId, directory, agent, model, yolo, sessionType, worktreeName, resumeSessionId)
+        return await this.rpcGateway.spawnSession(machineId, directory, agent, model, yolo, sessionType, worktreeName, resumeSessionId, resumeOriginator)
     }
 
     async resumeSession(sessionId: string, namespace: string): Promise<ResumeSessionResult> {
@@ -376,7 +379,8 @@ export class SyncEngine {
             undefined,
             undefined,
             undefined,
-            resumeToken
+            resumeToken,
+            undefined
         )
 
         if (spawnResult.type !== 'success') {
@@ -414,6 +418,28 @@ export class SyncEngine {
 
     async checkPathsExist(machineId: string, paths: string[]): Promise<Record<string, boolean>> {
         return await this.rpcGateway.checkPathsExist(machineId, paths)
+    }
+
+    async listImportableSessions(
+        machineId: string,
+        agent: 'codex',
+        options?: {
+            limit?: number
+            offset?: number
+            titleQuery?: string
+            cwdQuery?: string
+        }
+    ): Promise<{
+        sessions: RpcImportableSession[]
+        directories: string[]
+        page: {
+            limit: number
+            offset: number
+            total: number
+            hasMore: boolean
+        }
+    }> {
+        return await this.rpcGateway.listImportableSessions(machineId, agent, options)
     }
 
     async getGitStatus(sessionId: string, cwd?: string): Promise<RpcCommandResponse> {

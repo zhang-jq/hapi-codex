@@ -8,6 +8,7 @@ import { SessionActionMenu } from '@/components/SessionActionMenu'
 import { RenameSessionDialog } from '@/components/RenameSessionDialog'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useTranslation } from '@/lib/use-translation'
+import { formatImportedFrom, isImportedSession } from '@/utils/sessionOrigin'
 
 type SessionGroup = {
     directory: string
@@ -198,6 +199,8 @@ function SessionItem(props: {
     })
 
     const sessionName = getSessionTitle(s)
+    const importedFrom = formatImportedFrom(s.metadata)
+    const isImported = isImportedSession(s.metadata)
     const statusDotClass = s.active
         ? (s.thinking ? 'bg-[#007AFF]' : 'bg-[var(--app-badge-success-text)]')
         : 'bg-[var(--app-hint)]'
@@ -259,6 +262,12 @@ function SessionItem(props: {
                         </span>
                         {getAgentLabel(s)}
                     </span>
+                    {isImported ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-[var(--app-border)] px-2 py-0.5">
+                            {t('session.item.imported')}
+                            {importedFrom ? ` · ${importedFrom}` : ''}
+                        </span>
+                    ) : null}
                     <span>{t('session.item.modelMode')}: {s.modelMode || 'default'}</span>
                     {s.metadata?.worktree?.branch ? (
                         <span>{t('session.item.worktree')}: {s.metadata.worktree.branch}</span>

@@ -14,6 +14,7 @@ import { RpcHandlerManager } from './rpc/RpcHandlerManager'
 import { registerCommonHandlers } from '../modules/common/registerCommonHandlers'
 import type { SpawnSessionOptions, SpawnSessionResult } from '../modules/common/rpcTypes'
 import { applyVersionedAck } from './versionedUpdate'
+import { listCodexSessionsPage } from '@/codex/utils/listCodexSessions'
 
 interface ServerToRunnerEvents {
     update: (data: Update) => void
@@ -63,6 +64,31 @@ interface PathExistsResponse {
     exists: Record<string, boolean>
 }
 
+interface ImportableSessionsRequest {
+    agent?: 'codex'
+    limit?: number
+    offset?: number
+    titleQuery?: string
+    cwdQuery?: string
+}
+
+interface ImportableSessionsResponse {
+    sessions: Array<{
+        id: string
+        title: string
+        cwd: string
+        updatedAt: number
+        originator?: string
+    }>
+    directories: string[]
+    page: {
+        limit: number
+        offset: number
+        total: number
+        hasMore: boolean
+    }
+}
+
 export class ApiMachineClient {
     private socket!: Socket<ServerToRunnerEvents, RunnerToServerEvents>
     private keepAliveInterval: NodeJS.Timeout | null = null
@@ -97,11 +123,51 @@ export class ApiMachineClient {
 
             return { exists }
         })
+
+        this.rpcHandlerManager.registerHandler<ImportableSessionsRequest, ImportableSessionsResponse>('list-importable-sessions', async (params) => {
+            const agent = params?.agent ?? 'codex'
+            const limit = typeof params?.limit === 'number' && Number.isFinite(params.limit)
+                ? Math.max(1, Math.min(100, Math.trunc(params.limit)))
+                : 10
+            const offset = typeof params?.offset === 'number' && Number.isFinite(params.offset)
+                ? Math.max(0, Math.trunc(params.offset))
+                : 0
+            const titleQuery = typeof params?.titleQuery === 'string' ? params.titleQuery : undefined
+            const cwdQuery = typeof params?.cwdQuery === 'string' ? params.cwdQuery : undefined
+
+            if (agent !== 'codex') {
+                return {
+                    sessions: [],
+                    directories: [],
+                    page: {
+                        limit,
+                        offset,
+                        total: 0,
+                        hasMore: false
+                    }
+                }
+            }
+
+            const result = await listCodexSessionsPage({
+                limit,
+                offset,
+                titleQuery,
+                cwdQuery
+            })
+            return {
+                sessions: result.sessions,
+                directories: result.directories,
+                page: {
+                    ...result.page,
+                    total: result.total
+                }
+            }
+        })
     }
 
     setRPCHandlers({ spawnSession, stopSession, requestShutdown }: MachineRpcHandlers): void {
         this.rpcHandlerManager.registerHandler('spawn-happy-session', async (params: any) => {
-            const { directory, sessionId, resumeSessionId, machineId, approvedNewDirectoryCreation, agent, model, yolo, token, sessionType, worktreeName } = params || {}
+            const { directory, sessionId, resumeSessionId, resumeOriginator, machineId, approvedNewDirectoryCreation, agent, model, yolo, token, sessionType, worktreeName } = params || {}
 
             if (!directory) {
                 throw new Error('Directory is required')
@@ -111,6 +177,7 @@ export class ApiMachineClient {
                 directory,
                 sessionId,
                 resumeSessionId,
+                resumeOriginator,
                 machineId,
                 approvedNewDirectoryCreation,
                 agent,

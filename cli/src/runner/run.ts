@@ -337,6 +337,14 @@ export async function startRunner(): Promise<void> {
           };
         }
 
+        if (options.resumeOriginator) {
+          extraEnv = {
+            ...extraEnv,
+            HAPI_IMPORTED_SESSION: '1',
+            HAPI_IMPORTED_FROM: options.resumeOriginator
+          };
+        }
+
         // Construct arguments for the CLI
         const agentCommand = agent === 'codex'
           ? 'codex'

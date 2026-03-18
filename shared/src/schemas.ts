@@ -46,6 +46,9 @@ export const MetadataSchema = z.object({
     archivedBy: z.string().optional(),
     archiveReason: z.string().optional(),
     flavor: z.string().nullish(),
+    sessionOrigin: z.enum(['spawned', 'imported']).optional(),
+    importedFrom: z.string().optional(),
+    importedAt: z.number().optional(),
     worktree: WorktreeMetadataSchema.optional()
 })
 

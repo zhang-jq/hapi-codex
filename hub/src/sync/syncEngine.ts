@@ -23,7 +23,6 @@ import {
     type RpcListDirectoryResponse,
     type RpcPathExistsResponse,
     type RpcReadFileResponse,
-    type RpcSyncCodexSessionResponse,
     type RpcUploadFileResponse
 } from './rpcGateway'
 import { SessionCache } from './sessionCache'
@@ -44,10 +43,6 @@ export type {
 export type ResumeSessionResult =
     | { type: 'success'; sessionId: string }
     | { type: 'error'; message: string; code: 'session_not_found' | 'access_denied' | 'no_machine_online' | 'resume_unavailable' | 'resume_failed' }
-
-export type SyncCodexSessionResult =
-    | ({ type: 'success' } & RpcSyncCodexSessionResponse)
-    | { type: 'error'; message: string; code: 'session_not_found' | 'access_denied' | 'no_machine_online' | 'sync_unavailable' | 'sync_failed' }
 
 export class SyncEngine {
     private readonly eventPublisher: EventPublisher
@@ -397,46 +392,6 @@ export class SyncEngine {
         }
 
         return { type: 'success', sessionId: spawnResult.sessionId }
-    }
-
-    async syncCodexSession(sessionId: string, namespace: string): Promise<SyncCodexSessionResult> {
-        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
-        if (!access.ok) {
-            return {
-                type: 'error',
-                message: access.reason === 'access-denied' ? 'Session access denied' : 'Session not found',
-                code: access.reason === 'access-denied' ? 'access_denied' : 'session_not_found'
-            }
-        }
-
-        const metadata = access.session.metadata
-        if (!metadata || metadata.flavor !== 'codex' || typeof metadata.codexSessionId !== 'string' || metadata.codexSessionId.length === 0) {
-            return { type: 'error', message: 'Codex sync unavailable for this session', code: 'sync_unavailable' }
-        }
-
-        const onlineMachines = this.machineCache.getOnlineMachinesByNamespace(namespace)
-        if (onlineMachines.length === 0) {
-            return { type: 'error', message: 'No machine online', code: 'no_machine_online' }
-        }
-
-        const targetMachine = this.findTargetMachine(onlineMachines, metadata)
-        if (!targetMachine) {
-            return { type: 'error', message: 'No machine online', code: 'no_machine_online' }
-        }
-
-        try {
-            const result = await this.rpcGateway.syncCodexSession(targetMachine.id, metadata.codexSessionId)
-            return {
-                type: 'success',
-                ...result
-            }
-        } catch (error) {
-            return {
-                type: 'error',
-                message: error instanceof Error ? error.message : 'Failed to sync Codex session',
-                code: 'sync_failed'
-            }
-        }
     }
 
     async waitForSessionActive(sessionId: string, timeoutMs: number = 15_000): Promise<boolean> {

@@ -62,7 +62,6 @@ export default {
 
   // Session actions
   'session.action.rename': 'Rename',
-  'session.action.syncCodex': 'Sync to Codex',
   'session.action.archive': 'Archive',
   'session.action.delete': 'Delete',
   'session.action.copy': 'Copy',
@@ -91,11 +90,6 @@ export default {
   'button.dismiss': 'Dismiss',
   'button.copy': 'Copy',
   'button.paste': 'Paste',
-
-  // Toasts
-  'toast.syncCodex.title': 'Codex sync triggered',
-  'toast.syncCodex.body': 'Refreshed the Codex session index and normalized {count} historical image records.',
-  'toast.syncCodex.errorTitle': 'Codex sync failed',
 
   // New session form
   'newSession.title': 'Create Session',

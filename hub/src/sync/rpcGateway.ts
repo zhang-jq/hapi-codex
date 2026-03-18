@@ -63,12 +63,6 @@ export type RpcImportableSessionsResponse = {
     }
 }
 
-export type RpcSyncCodexSessionResponse = {
-    ok: true
-    normalizedImages: number
-    indexedAt: string
-}
-
 export class RpcGateway {
     constructor(
         private readonly io: Server,
@@ -248,32 +242,6 @@ export class RpcGateway {
                 total: typeof response.page.total === 'number' ? response.page.total : sessionsValue.length,
                 hasMore: response.page.hasMore === true
             }
-        }
-    }
-
-    async syncCodexSession(
-        machineId: string,
-        codexSessionId: string
-    ): Promise<RpcSyncCodexSessionResponse> {
-        const result = await this.machineRpc(
-            machineId,
-            'sync-codex-session',
-            { codexSessionId }
-        ) as RpcSyncCodexSessionResponse | unknown
-
-        if (!result || typeof result !== 'object') {
-            throw new Error('Unexpected sync-codex-session result')
-        }
-
-        const response = result as Partial<RpcSyncCodexSessionResponse>
-        if (response.ok !== true || typeof response.normalizedImages !== 'number' || typeof response.indexedAt !== 'string') {
-            throw new Error('Unexpected sync-codex-session result')
-        }
-
-        return {
-            ok: true,
-            normalizedImages: response.normalizedImages,
-            indexedAt: response.indexedAt
         }
     }
 

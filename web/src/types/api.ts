@@ -177,12 +177,6 @@ export type DeleteUploadResponse = {
     error?: string
 }
 
-export type SyncCodexSessionResponse = {
-    ok: true
-    normalizedImages: number
-    indexedAt: string
-}
-
 export type GitFileStatus = {
     fileName: string
     filePath: string

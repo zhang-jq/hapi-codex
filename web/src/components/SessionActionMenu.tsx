@@ -13,7 +13,6 @@ type SessionActionMenuProps = {
     isOpen: boolean
     onClose: () => void
     sessionActive: boolean
-    onSyncCodex?: () => void
     onRename: () => void
     onArchive: () => void
     onDelete: () => void
@@ -37,28 +36,6 @@ function EditIcon(props: { className?: string }) {
         >
             <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
             <path d="m15 5 4 4" />
-        </svg>
-    )
-}
-
-function SyncIcon(props: { className?: string }) {
-    return (
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={props.className}
-        >
-            <path d="M3 12a9 9 0 0 1 15.55-6.36" />
-            <path d="M21 3v6h-6" />
-            <path d="M21 12a9 9 0 0 1-15.55 6.36" />
-            <path d="M3 21v-6h6" />
         </svg>
     )
 }
@@ -119,7 +96,6 @@ export function SessionActionMenu(props: SessionActionMenuProps) {
         isOpen,
         onClose,
         sessionActive,
-        onSyncCodex,
         onRename,
         onArchive,
         onDelete,
@@ -135,11 +111,6 @@ export function SessionActionMenu(props: SessionActionMenuProps) {
     const handleRename = () => {
         onClose()
         onRename()
-    }
-
-    const handleSyncCodex = () => {
-        onClose()
-        onSyncCodex?.()
     }
 
     const handleArchive = () => {
@@ -267,18 +238,6 @@ export function SessionActionMenu(props: SessionActionMenuProps) {
                     <EditIcon className="text-[var(--app-hint)]" />
                     {t('session.action.rename')}
                 </button>
-
-                {onSyncCodex ? (
-                    <button
-                        type="button"
-                        role="menuitem"
-                        className={`${baseItemClassName} hover:bg-[var(--app-subtle-bg)]`}
-                        onClick={handleSyncCodex}
-                    >
-                        <SyncIcon className="text-[var(--app-hint)]" />
-                        {t('session.action.syncCodex')}
-                    </button>
-                ) : null}
 
                 {sessionActive ? (
                     <button

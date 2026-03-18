@@ -158,9 +158,9 @@ function ModeButton(props: {
         <button
             type="button"
             onClick={props.onClick}
-            className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 props.active
-                    ? 'bg-[var(--app-link)] text-white'
+                    ? 'border border-[var(--app-fg)] bg-[var(--app-fg)] text-[var(--app-bg)]'
                     : 'border border-[var(--app-border)] text-[var(--app-fg)] hover:bg-[var(--app-subtle-bg)]'
             }`}
         >
@@ -188,9 +188,9 @@ function PolicyToggleCard(props: {
                     type="button"
                     onClick={props.onToggle}
                     disabled={props.enabled && !props.canDisable}
-                    className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                    className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                         props.enabled
-                            ? 'bg-[var(--app-link)] text-white'
+                            ? 'border border-[var(--app-fg)] bg-[var(--app-fg)] text-[var(--app-bg)]'
                             : 'border border-[var(--app-border)] text-[var(--app-fg)] hover:bg-[var(--app-subtle-bg)]'
                     } ${props.enabled && !props.canDisable ? 'opacity-70' : ''}`}
                 >
